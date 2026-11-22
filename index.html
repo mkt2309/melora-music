@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#fff8f2" />
+  <meta name="description" content="Giao diện nghe nhạc trực tuyến - bản demo học tập." />
+  <title>Melora — Music Streaming</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <script type="module" src="./js/music-app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#songs" aria-label="Melora trang chủ" data-nav="songs">
+        <span class="brand-mark">♪</span>
+        <span>melora<span class="brand-dot">.</span></span>
+      </a>
+
+      <div class="sidebar-section">
+        <p class="sidebar-label">THƯ VIỆN</p>
+        <nav class="side-nav" aria-label="Điều hướng chính">
+          <button class="nav-item active" type="button" data-nav="songs"><span class="nav-icon">♫</span><span>Khám phá</span></button>
+          <button class="nav-item" type="button" data-nav="albums"><span class="nav-icon">▣</span><span>Album</span></button>
+          <button class="nav-item" type="button" data-nav="artists"><span class="nav-icon">♙</span><span>Nghệ sĩ</span></button>
+          <button class="nav-item" type="button" data-nav="playlists"><span class="nav-icon">☷</span><span>Playlist của tôi</span></button>
+        </nav>
+      </div>
+
+      <div class="sidebar-section sidebar-section-spaced">
+        <p class="sidebar-label">CỦA BẠN</p>
+        <nav class="side-nav" aria-label="Thư viện cá nhân">
+          <button class="nav-item" type="button" data-nav="favorites"><span class="nav-icon heart-icon">♡</span><span>Yêu thích</span></button>
+          <button class="nav-item" type="button" data-nav="history"><span class="nav-icon">◷</span><span>Nghe gần đây</span></button>
+        </nav>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-note">
+          <span class="note-icon">✦</span>
+          <div>
+            <strong>Âm nhạc mỗi ngày</strong>
+            <p>Khám phá những giai điệu mới.</p>
+          </div>
+        </div>
+        <p class="sidebar-footnote">MELORA · BẢN DEMO</p>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu-button icon-button" id="mobile-menu" type="button" aria-label="Mở menu">☰</button>
+        <div class="breadcrumb"><span>Không gian âm nhạc</span><span class="breadcrumb-separator">/</span><strong id="breadcrumb-current">Khám phá</strong></div>
+        <label class="search-box" for="global-search">
+          <span class="search-icon">⌕</span>
+          <input id="global-search" type="search" placeholder="Tìm bài hát, nghệ sĩ, album..." autocomplete="off" />
+          <kbd>⌘ K</kbd>
+        </label>
+        <button class="avatar-button" type="button" title="Tài khoản demo">M</button>
+      </header>
+
+      <section class="page-content" id="page-content" aria-live="polite">
+        <div class="loading-state"><span class="loading-spinner"></span>Đang tải thư viện nhạc...</div>
+      </section>
+    </main>
+  </div>
+
+  <section class="player-bar" aria-label="Trình phát nhạc">
+    <div class="now-playing">
+      <img id="player-cover" src="./assets/covers/cover-01.svg" alt="Ảnh bìa bài hát đang phát" />
+      <div class="now-playing-info">
+        <strong id="player-title">Chưa phát bài hát</strong>
+        <span id="player-artist">Chọn một bài hát để bắt đầu</span>
+      </div>
+      <button id="player-favorite" class="player-heart" type="button" aria-label="Thêm vào yêu thích">♡</button>
+    </div>
+
+    <div class="player-center">
+      <div class="player-controls">
+        <button class="player-control" id="shuffle-button" type="button" aria-label="Phát ngẫu nhiên" title="Phát ngẫu nhiên">⤨</button>
+        <button class="player-control" id="previous-button" type="button" aria-label="Bài trước" title="Bài trước">|◀</button>
+        <button class="play-button" id="play-button" type="button" aria-label="Phát nhạc" title="Phát / Tạm dừng">▶</button>
+        <button class="player-control" id="next-button" type="button" aria-label="Bài tiếp theo" title="Bài tiếp theo">▶|</button>
+        <button class="player-control" id="repeat-button" type="button" aria-label="Lặp lại" title="Lặp lại">↻</button>
+      </div>
+      <div class="timeline-row">
+        <span id="current-time">0:00</span>
+        <input id="seek-slider" class="range-slider seek-slider" type="range" min="0" max="100" value="0" aria-label="Vị trí phát nhạc" />
+        <span id="duration-time">0:00</span>
+      </div>
+    </div>
+
+    <div class="player-extra">
+      <span class="volume-icon">◖</span>
+      <input id="volume-slider" class="range-slider volume-slider" type="range" min="0" max="1" step="0.01" value="0.75" aria-label="Âm lượng" />
+    </div>
+  </section>
+
+  <div class="modal-backdrop" id="playlist-modal" hidden>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
+      <button class="modal-close icon-button" type="button" data-close-modal aria-label="Đóng">×</button>
+      <p class="eyebrow">THƯ VIỆN CÁ NHÂN</p>
+      <h2 id="playlist-modal-title">Thêm vào playlist</h2>
+      <p class="modal-description">Chọn playlist để lưu bài hát này.</p>
+      <div id="playlist-choices" class="playlist-choices"></div>
+      <div class="modal-footer">
+        <button class="button button-quiet" type="button" data-close-modal>Hủy</button>
+        <button class="button button-primary" id="confirm-add-playlist" type="button">Thêm bài hát</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
