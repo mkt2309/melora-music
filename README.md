@@ -1,6 +1,6 @@
 # Melora — Frontend mẫu cho hệ thống nghe nhạc
 
-Đây là bản frontend học tập được viết từ bộ khung `MusicApp` mà nhóm cung cấp. Giao diện dùng tông trắng – cam, HTML/CSS/JavaScript thuần và chia module ES.
+Đây là bản frontend học tập được viết từ bộ khung `MusicApp` mà Nguyễn Thanh Tùng cung cấp. Giao diện dùng tông trắng – cam, HTML/CSS/JavaScript thuần và chia module ES.
 
 ## 1. Chạy thử
 
