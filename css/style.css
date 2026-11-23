@@ -287,3 +287,5 @@ button:focus-visible, input:focus-visible, [tabindex="0"]:focus-visible { outlin
 @media (max-width: 760px) {
   .auth-button { display: grid !important; min-width: 76px; padding: 0 9px; font-size: 10px; }
 }
+
+.auth-form [hidden] { display: none !important; }
