@@ -396,10 +396,13 @@ export class MusicApp {
     this._pendingAddToPlaylist = trackId;
     this._pickerPlaylistId = null;
     const choices = document.getElementById('playlist-choices');
-    if (!this.playlists.length) {
+    const availablePlaylists = !this.db.demoMode && this.authUser
+      ? this.playlists.filter((playlist) => String(playlist.user_id) === String(this.authUser.id))
+      : this.playlists;
+    if (!availablePlaylists.length) {
       choices.innerHTML = '<p class="muted-text">Bạn chưa có playlist. Hãy tạo playlist trước.</p>';
     } else {
-      choices.innerHTML = this.playlists.map((playlist) => `
+      choices.innerHTML = availablePlaylists.map((playlist) => `
         <label class="playlist-choice">
           <input type="radio" name="playlist-choice" value="${escapeHTML(playlist.id)}" />
           <span class="playlist-choice-cover">♫</span>
