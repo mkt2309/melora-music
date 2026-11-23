@@ -129,6 +129,19 @@ export class MusicDB {
     }
   }
 
+  async restoreAuthUser() {
+    if (!readSession()?.access_token) return null;
+    try {
+      const payload = await this.request('/auth/me');
+      const user = payload?.user || null;
+      if (user) this.saveSession(readSession(), user);
+      return user;
+    } catch {
+      this.clearSession();
+      return null;
+    }
+  }
+
   async register({ email, password, username }) {
     const payload = await this.request('/auth/register', {
       method: 'POST',
