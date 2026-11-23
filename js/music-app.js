@@ -186,6 +186,10 @@ export class MusicApp {
       ? 'Đăng ký bằng email để lưu thư viện âm nhạc của bạn.'
       : 'Đăng nhập để truy cập playlist và dữ liệu cá nhân.';
     if (submit) submit.textContent = this.authMode === 'register' ? 'Tạo tài khoản' : 'Đăng nhập';
+    document.getElementById('auth-password')?.setAttribute(
+      'autocomplete',
+      this.authMode === 'register' ? 'new-password' : 'current-password'
+    );
     if (switchText) switchText.textContent = this.authMode === 'register'
       ? 'Đã có tài khoản?'
       : 'Chưa có tài khoản?';
