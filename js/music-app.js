@@ -393,14 +393,20 @@ export class MusicApp {
   }
 
   openPlaylistModal(trackId) {
+    if (!this.db.demoMode && !this.authUser) {
+      this.notify('Bạn cần đăng nhập để thêm bài hát vào playlist.', 'error');
+      return;
+    }
     this._pendingAddToPlaylist = trackId;
     this._pickerPlaylistId = null;
     const choices = document.getElementById('playlist-choices');
-    const availablePlaylists = !this.db.demoMode && this.authUser
-      ? this.playlists.filter((playlist) => String(playlist.user_id) === String(this.authUser.id))
-      : this.playlists;
+    const availablePlaylists = this.db.demoMode
+      ? this.playlists
+      : (this.authUser
+        ? this.playlists.filter((playlist) => String(playlist.user_id) === String(this.authUser.id))
+        : []);
     if (!availablePlaylists.length) {
-      choices.innerHTML = '<p class="muted-text">Bạn chưa có playlist. Hãy tạo playlist trước.</p>';
+      choices.innerHTML = '<p class="muted-text">Bạn chưa có playlist riêng. Hãy tạo playlist trước.</p>';
     } else {
       choices.innerHTML = availablePlaylists.map((playlist) => `
         <label class="playlist-choice">
