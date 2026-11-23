@@ -21,6 +21,7 @@ const albumTracksRoutes = require('./routes/albumTracksRoutes');
 const songArtistsRoutes = require('./routes/songArtistsRoutes');
 const albumArtistsRoutes = require('./routes/albumArtistsRoutes');
 const songGenresRoutes = require('./routes/songGenresRoutes');
+const streamRoutes = require('./routes/streamRoutes');
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use(cors({
 app.use(express.json());
 
 app.use('/api/health', healthRoutes);
+app.use('/api/stream', streamRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/songs', songsRoutes);
