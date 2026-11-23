@@ -20,8 +20,9 @@ function writeLocal(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-function unwrap(payload) {
+function unwrap(payload, collectionKey) {
   if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.[collectionKey])) return payload[collectionKey];
   if (Array.isArray(payload?.data)) return payload.data;
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
@@ -57,7 +58,7 @@ export class MusicDB {
   async getSongs(query = '') {
     if (!this.demoMode) {
       const suffix = query ? `?q=${encodeURIComponent(query)}` : '';
-      return unwrap(await this.request(`/songs${suffix}`));
+      return unwrap(await this.request(`/songs${suffix}`), 'songs');
     }
     const keyword = query.trim().toLocaleLowerCase('vi');
     return demoTracks.filter((track) => !keyword ||
@@ -65,21 +66,21 @@ export class MusicDB {
   }
 
   async getAlbums() {
-    return this.demoMode ? [...demoAlbums] : unwrap(await this.request('/albums'));
+    return this.demoMode ? [...demoAlbums] : unwrap(await this.request('/albums'), 'albums');
   }
 
   async getArtists() {
-    return this.demoMode ? [...demoArtists] : unwrap(await this.request('/artists'));
+    return this.demoMode ? [...demoArtists] : unwrap(await this.request('/artists'), 'artists');
   }
 
   async getPlaylists() {
-    if (!this.demoMode) return unwrap(await this.request('/playlists'));
+    if (!this.demoMode) return unwrap(await this.request('/playlists'), 'playlists');
     return readLocal(STORAGE_KEYS.playlists, demoPlaylists.map((item) => ({ ...item, track_ids: [...item.track_ids] })));
   }
 
   async getFavoriteIds() {
     if (!this.demoMode) {
-      const records = unwrap(await this.request('/favorites'));
+      const records = unwrap(await this.request('/favorites'), 'favorites');
       return records.map((item) => String(typeof item === 'object' ? (item.song_id ?? item.id) : item));
     }
     return readLocal(STORAGE_KEYS.favorites, ['song-01', 'song-05']);
@@ -87,7 +88,7 @@ export class MusicDB {
 
   async getHistoryIds() {
     if (!this.demoMode) {
-      const records = unwrap(await this.request('/history'));
+      const records = unwrap(await this.request('/listening-history'), 'history');
       return records.map((item) => String(typeof item === 'object' ? (item.song_id ?? item.id) : item));
     }
     return readLocal(STORAGE_KEYS.history, ['song-03', 'song-01', 'song-06']);
@@ -161,7 +162,7 @@ export class MusicDB {
 
   async recordPlay(songId) {
     if (!this.demoMode) {
-      await this.request('/history', {
+      await this.request('/listening-history', {
         method: 'POST',
         body: JSON.stringify({ song_id: songId })
       });
