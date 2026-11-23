@@ -283,3 +283,7 @@ button:focus-visible, input:focus-visible, [tabindex="0"]:focus-visible { outlin
 .auth-switch-row { margin: 17px 0 0; color: #938980; text-align: center; font-size: 11px; }
 .auth-switch-row .text-button { margin-left: 3px; cursor: pointer; }
 .auth-form button:disabled { opacity: .6; cursor: wait; }
+
+@media (max-width: 760px) {
+  .auth-button { display: grid !important; min-width: 76px; padding: 0 9px; font-size: 10px; }
+}
