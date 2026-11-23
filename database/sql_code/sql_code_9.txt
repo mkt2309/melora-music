@@ -1,0 +1,95 @@
+-- PLAYLISTS
+
+CREATE POLICY "Users can view public or own playlists"
+ON public.playlists
+FOR SELECT
+TO anon, authenticated
+USING (
+    is_public = TRUE
+    OR auth.uid() = user_id
+);
+
+CREATE POLICY "Users can create own playlists"
+ON public.playlists
+FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own playlists"
+ON public.playlists
+FOR UPDATE
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own playlists"
+ON public.playlists
+FOR DELETE
+TO authenticated
+USING (auth.uid() = user_id);
+
+
+-- PLAYLIST_ITEMS
+
+CREATE POLICY "Users can view accessible playlist items"
+ON public.playlist_items
+FOR SELECT
+TO anon, authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.playlists p
+        WHERE p.playlist_id = playlist_items.playlist_id
+          AND (
+              p.is_public = TRUE
+              OR p.user_id = auth.uid()
+          )
+    )
+);
+
+CREATE POLICY "Users can add songs to own playlists"
+ON public.playlist_items
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.playlists p
+        WHERE p.playlist_id = playlist_items.playlist_id
+          AND p.user_id = auth.uid()
+    )
+);
+
+CREATE POLICY "Users can update own playlist items"
+ON public.playlist_items
+FOR UPDATE
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.playlists p
+        WHERE p.playlist_id = playlist_items.playlist_id
+          AND p.user_id = auth.uid()
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.playlists p
+        WHERE p.playlist_id = playlist_items.playlist_id
+          AND p.user_id = auth.uid()
+    )
+);
+
+CREATE POLICY "Users can delete own playlist items"
+ON public.playlist_items
+FOR DELETE
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.playlists p
+        WHERE p.playlist_id = playlist_items.playlist_id
+          AND p.user_id = auth.uid()
+    )
+);

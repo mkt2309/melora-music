@@ -1,0 +1,17 @@
+CREATE POLICY "Anyone can view artist follows"
+ON public.artist_follows
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+CREATE POLICY "Users can follow artists"
+ON public.artist_follows
+FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can unfollow artists"
+ON public.artist_follows
+FOR DELETE
+TO authenticated
+USING (auth.uid() = user_id);

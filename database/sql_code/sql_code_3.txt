@@ -1,0 +1,7 @@
+
+-- Không cho phép một bài hát xuất hiện nhiều lần
+-- trong cùng một album.
+
+ALTER TABLE public.album_tracks
+ADD CONSTRAINT uq_album_tracks_album_song
+UNIQUE (album_id, song_id);

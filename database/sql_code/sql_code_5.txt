@@ -1,0 +1,12 @@
+CREATE POLICY "Anyone can view profiles"
+ON public.profiles
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+CREATE POLICY "Users can update own profile"
+ON public.profiles
+FOR UPDATE
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
