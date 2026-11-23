@@ -98,7 +98,7 @@ export class MusicDB {
     if (!this.demoMode) {
       const id = encodeURIComponent(songId);
       if (currentlyFavorite) await this.request(`/favorites/${id}`, { method: 'DELETE' });
-      else await this.request('/favorites', { method: 'POST', body: JSON.stringify({ song_id: songId }) });
+      else await this.request('/favorites', { method: 'POST', body: JSON.stringify({ song_id: Number(songId) }) });
       return !currentlyFavorite;
     }
     const favorites = readLocal(STORAGE_KEYS.favorites, []);
@@ -117,7 +117,7 @@ export class MusicDB {
         method: 'POST',
         body: JSON.stringify({ name: cleanName })
       });
-      return payload?.data || payload;
+      return payload?.playlist || payload?.data || payload;
     }
     const playlists = await this.getPlaylists();
     const playlist = {
@@ -133,22 +133,26 @@ export class MusicDB {
 
   async addSongToPlaylist(playlistId, songId) {
     if (!this.demoMode) {
-      await this.request(`/playlists/${encodeURIComponent(playlistId)}/songs`, {
+      await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
         method: 'POST',
-        body: JSON.stringify({ song_id: songId })
+        body: JSON.stringify({ song_id: Number(songId) })
       });
       return;
     }
     const playlists = await this.getPlaylists();
     const playlist = playlists.find((item) => String(item.id) === String(playlistId));
     if (!playlist) throw new Error('Không tìm thấy playlist.');
-    playlist.track_ids = [...new Set([...(playlist.track_ids || []), songId])];
+    playlist.track_ids = [...(playlist.track_ids || []), songId];
     writeLocal(STORAGE_KEYS.playlists, playlists);
   }
 
   async removeSongFromPlaylist(playlistId, songId) {
     if (!this.demoMode) {
-      await this.request(`/playlists/${encodeURIComponent(playlistId)}/songs/${encodeURIComponent(songId)}`, {
+      const payload = await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`);
+      const items = unwrap(payload, 'items');
+      const item = items.find((entry) => String(entry.song_id) === String(songId));
+      if (!item) return;
+      await this.request(`/playlist-items/${encodeURIComponent(item.playlist_item_id)}`, {
         method: 'DELETE'
       });
       return;
@@ -156,7 +160,8 @@ export class MusicDB {
     const playlists = await this.getPlaylists();
     const playlist = playlists.find((item) => String(item.id) === String(playlistId));
     if (!playlist) return;
-    playlist.track_ids = (playlist.track_ids || []).filter((id) => String(id) !== String(songId));
+    const index = (playlist.track_ids || []).findIndex((id) => String(id) === String(songId));
+    if (index >= 0) playlist.track_ids.splice(index, 1);
     writeLocal(STORAGE_KEYS.playlists, playlists);
   }
 
@@ -164,7 +169,7 @@ export class MusicDB {
     if (!this.demoMode) {
       await this.request('/listening-history', {
         method: 'POST',
-        body: JSON.stringify({ song_id: songId })
+        body: JSON.stringify({ song_id: Number(songId) })
       });
       return;
     }
