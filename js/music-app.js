@@ -49,6 +49,7 @@ export class MusicApp {
   async init() {
     this.bindUI();
     bindPlayer(this);
+    this.authUser = await this.db.restoreAuthUser();
     this.updateAuthButton();
     try {
       const [tracks, albums, artists, playlists, favorites, history] = await Promise.all([
@@ -369,6 +370,10 @@ export class MusicApp {
   }
 
   async toggleFavorite(id) {
+    if (!this.db.demoMode && !this.authUser) {
+      this.openAuthModal('login');
+      return;
+    }
     const key = String(id);
     const currentlyFavorite = this.favorites.has(key);
     await this.db.toggleFavorite(id, currentlyFavorite);
@@ -382,6 +387,10 @@ export class MusicApp {
   }
 
   async createPlaylistFromPrompt() {
+    if (!this.db.demoMode && !this.authUser) {
+      this.openAuthModal('login');
+      return;
+    }
     const name = window.prompt('Nhập tên playlist mới:');
     if (name === null) return;
     await this.db.createPlaylist(name);
@@ -394,7 +403,7 @@ export class MusicApp {
 
   openPlaylistModal(trackId) {
     if (!this.db.demoMode && !this.authUser) {
-      this.notify('Bạn cần đăng nhập để thêm bài hát vào playlist.', 'error');
+      this.openAuthModal('login');
       return;
     }
     this._pendingAddToPlaylist = trackId;
