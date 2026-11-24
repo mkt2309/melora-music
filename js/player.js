@@ -3,6 +3,23 @@ import { fmtTime } from './helpers.js';
 export function bindPlayer(app) {
   const byId = (id) => document.getElementById(id);
 
+  const collapseButton = byId('collapse-player-button');
+  const expandButton = byId('expand-player-button');
+
+  collapseButton?.addEventListener('click', () => {
+    document.body.classList.add('player-hidden');
+    if (expandButton) {
+      expandButton.hidden = false;
+      expandButton.focus();
+    }
+  });
+
+  expandButton?.addEventListener('click', () => {
+    document.body.classList.remove('player-hidden');
+    expandButton.hidden = true;
+    collapseButton?.focus();
+  });
+
   byId('play-button')?.addEventListener('click', async () => {
     try {
       if (!app.engine.currentTrack) {

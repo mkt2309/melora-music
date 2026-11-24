@@ -36,6 +36,8 @@ export class MusicApp {
     this.repeat = false;
     this.queue = [];
     this._toastTimer = null;
+    this.authUser = this.db.getCurrentUser();
+    this.authMode = 'login';
     window._app = this;
   }
 
@@ -47,6 +49,8 @@ export class MusicApp {
   async init() {
     this.bindUI();
     bindPlayer(this);
+    this.authUser = await this.db.restoreAuthUser();
+    this.updateAuthButton();
     try {
       const [tracks, albums, artists, playlists, favorites, history] = await Promise.all([
         this.db.getSongs(), this.db.getAlbums(), this.db.getArtists(),
@@ -88,6 +92,18 @@ export class MusicApp {
       document.getElementById('sidebar')?.classList.toggle('sidebar-open');
     });
 
+    document.getElementById('account-button')?.addEventListener('click', () => this.handleAccountClick());
+    document.getElementById('auth-form')?.addEventListener('submit', (event) => this.submitAuth(event));
+    document.querySelectorAll('[data-auth-mode]').forEach((button) => {
+      button.addEventListener('click', () => this.openAuthModal(button.dataset.authMode));
+    });
+    document.querySelectorAll('[data-close-auth]').forEach((button) => {
+      button.addEventListener('click', () => this.closeAuthModal());
+    });
+    document.getElementById('auth-modal')?.addEventListener('click', (event) => {
+      if (event.target.id === 'auth-modal') this.closeAuthModal();
+    });
+
     document.getElementById('page-content')?.addEventListener('click', (event) => this.handleContentClick(event));
 
     document.getElementById('confirm-add-playlist')?.addEventListener('click', () => this.confirmAddToPlaylist());
@@ -109,6 +125,140 @@ export class MusicApp {
       }
       if (event.key === 'Escape') this.closePlaylistModal();
     });
+  }
+
+  updateAuthButton() {
+    const button = document.getElementById('account-button');
+    if (!button) return;
+
+    if (this.authUser) {
+      const name = this.authUser.user_metadata?.display_name ||
+        this.authUser.user_metadata?.username ||
+        this.authUser.email ||
+        'Tài khoản';
+      button.textContent = name.length > 14 ? `${name.slice(0, 12)}…` : name;
+      button.title = `Đã đăng nhập: ${this.authUser.email || name}. Nhấn để đăng xuất.`;
+      button.classList.add('is-authenticated');
+    } else {
+      button.textContent = 'Đăng nhập';
+      button.title = 'Đăng nhập hoặc tạo tài khoản';
+      button.classList.remove('is-authenticated');
+    }
+  }
+
+  handleAccountClick() {
+    if (!this.authUser) {
+      this.openAuthModal('login');
+      return;
+    }
+
+    if (!window.confirm(`Bạn đang đăng nhập bằng ${this.authUser.email || 'tài khoản này'}. Bạn có muốn đăng xuất không?`)) {
+      return;
+    }
+
+    this.db.logout()
+      .then(async () => {
+        this.authUser = null;
+        if (!this.db.demoMode) {
+          this.favorites.clear();
+          this.history = [];
+          await this.refreshPlaylists();
+        }
+        this.updateAuthButton();
+        this.render();
+        this.notify('Đã đăng xuất.');
+      })
+      .catch((error) => this.notify(error.message, 'error'));
+  }
+
+  openAuthModal(mode = 'login') {
+    this.authMode = mode === 'register' ? 'register' : 'login';
+    const modal = document.getElementById('auth-modal');
+    const username = document.getElementById('auth-username-field');
+    const title = document.getElementById('auth-title');
+    const description = document.getElementById('auth-description');
+    const submit = document.getElementById('auth-submit');
+    const switchText = document.getElementById('auth-switch-text');
+
+    if (username) username.hidden = this.authMode !== 'register';
+    if (title) title.textContent = this.authMode === 'register' ? 'Tạo tài khoản Melora' : 'Chào mừng trở lại';
+    if (description) description.textContent = this.authMode === 'register'
+      ? 'Đăng ký bằng email để lưu thư viện âm nhạc của bạn.'
+      : 'Đăng nhập để truy cập playlist và dữ liệu cá nhân.';
+    if (submit) submit.textContent = this.authMode === 'register' ? 'Tạo tài khoản' : 'Đăng nhập';
+    document.getElementById('auth-password')?.setAttribute(
+      'autocomplete',
+      this.authMode === 'register' ? 'new-password' : 'current-password'
+    );
+    if (switchText) switchText.textContent = this.authMode === 'register'
+      ? 'Đã có tài khoản?'
+      : 'Chưa có tài khoản?';
+
+    document.getElementById('auth-switch')?.setAttribute(
+      'data-auth-mode',
+      this.authMode === 'register' ? 'login' : 'register'
+    );
+    const switchButton = document.getElementById('auth-switch');
+    if (switchButton) switchButton.textContent = this.authMode === 'register' ? 'Đăng nhập' : 'Đăng ký';
+
+    if (modal) modal.hidden = false;
+    document.getElementById('auth-email')?.focus();
+  }
+
+  closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) modal.hidden = true;
+    document.getElementById('auth-form')?.reset();
+  }
+
+  async submitAuth(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const email = form.elements.email.value.trim();
+    const password = form.elements.password.value;
+    const username = form.elements.username.value.trim();
+    const submit = document.getElementById('auth-submit');
+
+    if (this.authMode === 'register' && !username) {
+      this.notify('Hãy nhập tên người dùng.', 'error');
+      return;
+    }
+
+    if (submit) submit.disabled = true;
+    try {
+      const result = this.authMode === 'register'
+        ? await this.db.register({ email, password, username })
+        : await this.db.login({ email, password });
+
+      if (result.session) {
+        this.authUser = result.user || this.db.getCurrentUser();
+        if (!this.authUser) {
+          const me = await this.db.request('/auth/me');
+          this.authUser = me.user;
+          this.db.saveSession(this.db.getSession(), this.authUser);
+        }
+        if (!this.db.demoMode) {
+          const [favorites, history, playlists] = await Promise.all([
+            this.db.getFavoriteIds(),
+            this.db.getHistoryIds(),
+            this.db.getPlaylists()
+          ]);
+          this.favorites = new Set(favorites.map(String));
+          this.history = history.map(String);
+          this.playlists = playlists;
+        }
+        this.updateAuthButton();
+        this.closeAuthModal();
+        this.render();
+        this.notify(this.authMode === 'register' ? 'Tạo tài khoản thành công.' : 'Đăng nhập thành công.');
+      } else {
+        this.notify('Đăng ký đã được ghi nhận. Hãy kiểm tra email để xác nhận tài khoản trước khi đăng nhập.');
+      }
+    } catch (error) {
+      this.notify(error.message || 'Không thể xác thực tài khoản.', 'error');
+    } finally {
+      if (submit) submit.disabled = false;
+    }
   }
 
   navigate(tab) {
@@ -145,6 +295,26 @@ export class MusicApp {
         case 'favorite': await this.toggleFavorite(id); break;
         case 'add-playlist': this.openPlaylistModal(id); break;
         case 'create-playlist': await this.createPlaylistFromPrompt(); break;
+        case 'open-playlist': this.openPlaylist(id); break;
+        case 'delete-playlist': {
+          const playlist = this.playlists.find((item) => String(item.id) === String(id));
+          if (!playlist) throw new Error('Không tìm thấy playlist.');
+          if (!this.db.demoMode &&
+              (!this.authUser || String(playlist.user_id) !== String(this.authUser.id))) {
+            throw new Error('Bạn chỉ có thể xóa playlist do mình tạo.');
+          }
+          if (!window.confirm(`Bạn có chắc muốn xóa playlist "${playlist.name}" không?`)) break;
+          await this.db.deletePlaylist(id);
+          await this.refreshPlaylists();
+          if (this.detailView?.type === 'playlist' &&
+              String(this.detailView.key) === String(id)) {
+            this.detailView = null;
+            this.currentTab = 'playlists';
+          }
+          this.render();
+          this.notify('Đã xóa playlist.');
+          break;
+        }
         case 'remove-playlist-song':
           await this.db.removeSongFromPlaylist(playlistId, id);
           await this.refreshPlaylists();
@@ -224,6 +394,10 @@ export class MusicApp {
   }
 
   async toggleFavorite(id) {
+    if (!this.db.demoMode && !this.authUser) {
+      this.openAuthModal('login');
+      return;
+    }
     const key = String(id);
     const currentlyFavorite = this.favorites.has(key);
     await this.db.toggleFavorite(id, currentlyFavorite);
@@ -237,6 +411,10 @@ export class MusicApp {
   }
 
   async createPlaylistFromPrompt() {
+    if (!this.db.demoMode && !this.authUser) {
+      this.openAuthModal('login');
+      return;
+    }
     const name = window.prompt('Nhập tên playlist mới:');
     if (name === null) return;
     await this.db.createPlaylist(name);
@@ -248,13 +426,22 @@ export class MusicApp {
   }
 
   openPlaylistModal(trackId) {
+    if (!this.db.demoMode && !this.authUser) {
+      this.openAuthModal('login');
+      return;
+    }
     this._pendingAddToPlaylist = trackId;
     this._pickerPlaylistId = null;
     const choices = document.getElementById('playlist-choices');
-    if (!this.playlists.length) {
-      choices.innerHTML = '<p class="muted-text">Bạn chưa có playlist. Hãy tạo playlist trước.</p>';
+    const availablePlaylists = this.db.demoMode
+      ? this.playlists
+      : (this.authUser
+        ? this.playlists.filter((playlist) => String(playlist.user_id) === String(this.authUser.id))
+        : []);
+    if (!availablePlaylists.length) {
+      choices.innerHTML = '<p class="muted-text">Bạn chưa có playlist riêng. Hãy tạo playlist trước.</p>';
     } else {
-      choices.innerHTML = this.playlists.map((playlist) => `
+      choices.innerHTML = availablePlaylists.map((playlist) => `
         <label class="playlist-choice">
           <input type="radio" name="playlist-choice" value="${escapeHTML(playlist.id)}" />
           <span class="playlist-choice-cover">♫</span>
@@ -406,9 +593,14 @@ export class MusicApp {
 
   renderPlaylistCard(playlist) {
     const coverUrl = playlist.cover_url || './assets/covers/cover-06.svg';
-    return `<article class="album-card" data-open-playlist="${escapeHTML(playlist.id)}" tabindex="0" role="button" aria-label="Mở playlist ${escapeHTML(playlist.name)}">
-      <div class="album-cover-wrap"><img src="${escapeHTML(coverUrl)}" alt="" loading="lazy" /><span class="cover-play">▶</span></div>
-      <h3>${escapeHTML(playlist.name)}</h3><p>${(playlist.track_ids || []).length} bài hát</p>
+    const canDelete = this.db.demoMode ||
+      (this.authUser && String(playlist.user_id) === String(this.authUser.id));
+    return `<article class="album-card playlist-card">
+      <button class="playlist-card-open" type="button" data-action="open-playlist" data-id="${escapeHTML(playlist.id)}" aria-label="Mở playlist ${escapeHTML(playlist.name)}">
+        <div class="album-cover-wrap"><img src="${escapeHTML(coverUrl)}" alt="" loading="lazy" /><span class="cover-play">▶</span></div>
+        <h3>${escapeHTML(playlist.name)}</h3><p>${(playlist.track_ids || []).length} bài hát</p>
+      </button>
+      ${canDelete ? `<button class="playlist-delete-button" type="button" data-action="delete-playlist" data-id="${escapeHTML(playlist.id)}" aria-label="Xóa playlist ${escapeHTML(playlist.name)}" title="Xóa playlist">×</button>` : ''}
     </article>`;
   }
 

@@ -56,7 +56,7 @@
           <input id="global-search" type="search" placeholder="Tìm bài hát, nghệ sĩ, album..." autocomplete="off" />
           <kbd>⌘ K</kbd>
         </label>
-        <button class="avatar-button" type="button" title="Tài khoản demo">M</button>
+        <button class="avatar-button auth-button" id="account-button" type="button" title="Đăng nhập hoặc tạo tài khoản">Đăng nhập</button>
       </header>
 
       <section class="page-content" id="page-content" aria-live="polite">
@@ -94,7 +94,49 @@
       <span class="volume-icon">◖</span>
       <input id="volume-slider" class="range-slider volume-slider" type="range" min="0" max="1" step="0.01" value="0.75" aria-label="Âm lượng" />
     </div>
+
+    <button
+      id="collapse-player-button"
+      class="player-collapse-button"
+      type="button"
+      aria-label="Ẩn trình phát"
+      title="Ẩn trình phát"
+    >⌄</button>
   </section>
+
+  <button
+    id="expand-player-button"
+    class="player-expand-button"
+    type="button"
+    aria-label="Hiện trình phát"
+    title="Hiện trình phát"
+    hidden
+  >♫</button>
+
+  <div class="modal-backdrop" id="auth-modal" hidden>
+    <section class="modal-card auth-modal-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <button class="modal-close icon-button" type="button" data-close-auth aria-label="Đóng">×</button>
+      <p class="eyebrow">TÀI KHOẢN MELORA</p>
+      <h2 id="auth-title">Chào mừng trở lại</h2>
+      <p class="modal-description" id="auth-description">Đăng nhập để truy cập playlist và dữ liệu cá nhân.</p>
+      <form id="auth-form" class="auth-form">
+        <label id="auth-username-field" hidden>
+          <span>Tên người dùng</span>
+          <input id="auth-username" name="username" type="text" minlength="3" maxlength="30" autocomplete="username" placeholder="Tên hiển thị" />
+        </label>
+        <label>
+          <span>Email</span>
+          <input id="auth-email" name="email" type="email" required autocomplete="email" placeholder="name@example.com" />
+        </label>
+        <label>
+          <span>Mật khẩu</span>
+          <input id="auth-password" name="password" type="password" required minlength="8" autocomplete="current-password" placeholder="Ít nhất 8 ký tự" />
+        </label>
+        <button class="button button-primary auth-submit" id="auth-submit" type="submit">Đăng nhập</button>
+      </form>
+      <p class="auth-switch-row"><span id="auth-switch-text">Chưa có tài khoản?</span> <button id="auth-switch" class="text-button" type="button" data-auth-mode="register">Đăng ký</button></p>
+    </section>
+  </div>
 
   <div class="modal-backdrop" id="playlist-modal" hidden>
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
