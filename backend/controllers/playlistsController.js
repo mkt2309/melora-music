@@ -119,7 +119,54 @@ const createPlaylist = async (req, res) => {
     }
 };
 
+ 
+// Xóa playlist thuộc quyền sở hữu của người dùng đang đăng nhập
+const deletePlaylist = async (req, res) => {
+    try {
+        const playlistId = Number(req.params.id);
+
+        if (!Number.isSafeInteger(playlistId) || playlistId <= 0) {
+            return res.status(400).json({
+                message: 'Invalid playlist ID.'
+            });
+        }
+
+        const supabase = createUserClient(req.accessToken);
+        const { data, error } = await supabase
+            .from('playlists')
+            .delete()
+            .eq('playlist_id', playlistId)
+            .eq('user_id', req.user.id)
+            .select('playlist_id')
+            .maybeSingle();
+
+        if (error) {
+            console.error('Delete playlist error:', error.message);
+            return res.status(500).json({
+                message: 'Failed to delete playlist.'
+            });
+        }
+
+        if (!data) {
+            return res.status(404).json({
+                message: 'Playlist not found or you do not have permission to delete it.'
+            });
+        }
+
+        return res.json({
+            message: 'Playlist deleted successfully.',
+            playlist_id: data.playlist_id
+        });
+    } catch (error) {
+        console.error('Delete playlist error:', error.message);
+        return res.status(500).json({
+            message: 'Failed to delete playlist.'
+        });
+    }
+};
+
 module.exports = {
     getPlaylists,
-    createPlaylist
+    createPlaylist,
+    deletePlaylist
 };
