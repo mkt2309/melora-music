@@ -1,16 +1,12 @@
+const supabase = require('../config/supabase');
 const supabasePublic = require('../config/supabasePublic');
 
-// Trả về URL HTTPS trực tiếp của bản nhạc mẫu SoundHelix.
+// Tạo URL có thời hạn cho tệp âm thanh thuộc một bài hát trong thư viện.
 const getStreamUrl = async (req, res) => {
     try {
         const songId = req.params.songId;
-        const numericSongId = Number(songId);
 
-        if (
-            !Number.isSafeInteger(numericSongId) ||
-            numericSongId < 1 ||
-            String(numericSongId) !== songId
-        ) {
+        if (!/^[1-9]\d*$/.test(songId)) {
             return res.status(400).json({
                 message: 'A valid songId is required.'
             });
@@ -18,8 +14,8 @@ const getStreamUrl = async (req, res) => {
 
         const { data: song, error: songError } = await supabasePublic
             .from('songs')
-            .select('song_id, title, audio_path, mime_type')
-            .eq('song_id', numericSongId)
+            .select('song_id, title, audio_path')
+            .eq('song_id', songId)
             .maybeSingle();
 
         if (songError) {
@@ -37,45 +33,31 @@ const getStreamUrl = async (req, res) => {
 
         if (!song.audio_path) {
             return res.status(404).json({
-                message: 'Audio URL is not available for this song yet.'
+                message: 'Audio file is not available for this song yet.'
             });
         }
 
-        let audioUrl;
+        const { data, error } = await supabase.storage
+            .from('audio')
+            .createSignedUrl(song.audio_path, 3600);
 
-        try {
-            audioUrl = new URL(song.audio_path);
-        } catch {
+        if (error || !data?.signedUrl) {
+            console.error('Create audio signed URL error:', error?.message);
             return res.status(500).json({
-                message: 'The audio URL stored for this song is invalid.'
-            });
-        }
-
-        // Mỗi bài trong bộ dữ liệu hiện tại được gán một bản mẫu SoundHelix tương ứng.
-        const expectedPath = `/examples/mp3/SoundHelix-Song-${numericSongId - 8}.mp3`;
-
-        if (
-            numericSongId < 9 ||
-            numericSongId > 16 ||
-            audioUrl.protocol !== 'https:' ||
-            audioUrl.hostname !== 'www.soundhelix.com' ||
-            audioUrl.pathname !== expectedPath
-        ) {
-            return res.status(400).json({
-                message: 'The audio URL is not an approved SoundHelix sample.'
+                message: 'Unable to create an audio stream URL.'
             });
         }
 
         return res.json({
-            message: 'Audio stream URL retrieved successfully.',
+            message: 'Audio stream URL created successfully.',
             song_id: song.song_id,
-            url: audioUrl.href,
-            mime_type: song.mime_type || 'audio/mpeg'
+            url: data.signedUrl,
+            expires_in: 3600
         });
     } catch (error) {
         console.error('Get stream URL error:', error.message);
         return res.status(500).json({
-            message: 'Failed to retrieve audio stream URL.'
+            message: 'Failed to create audio stream URL.'
         });
     }
 };
