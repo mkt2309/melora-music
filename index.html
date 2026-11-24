@@ -94,7 +94,24 @@
       <span class="volume-icon">◖</span>
       <input id="volume-slider" class="range-slider volume-slider" type="range" min="0" max="1" step="0.01" value="0.75" aria-label="Âm lượng" />
     </div>
+
+    <button
+      id="collapse-player-button"
+      class="player-collapse-button"
+      type="button"
+      aria-label="Ẩn trình phát"
+      title="Ẩn trình phát"
+    >⌄</button>
   </section>
+
+  <button
+    id="expand-player-button"
+    class="player-expand-button"
+    type="button"
+    aria-label="Hiện trình phát"
+    title="Hiện trình phát"
+    hidden
+  >♫</button>
 
   <div class="modal-backdrop" id="auth-modal" hidden>
     <section class="modal-card auth-modal-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
