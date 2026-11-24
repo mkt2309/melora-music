@@ -295,6 +295,26 @@ export class MusicApp {
         case 'favorite': await this.toggleFavorite(id); break;
         case 'add-playlist': this.openPlaylistModal(id); break;
         case 'create-playlist': await this.createPlaylistFromPrompt(); break;
+        case 'open-playlist': this.openPlaylist(id); break;
+        case 'delete-playlist': {
+          const playlist = this.playlists.find((item) => String(item.id) === String(id));
+          if (!playlist) throw new Error('Không tìm thấy playlist.');
+          if (!this.db.demoMode &&
+              (!this.authUser || String(playlist.user_id) !== String(this.authUser.id))) {
+            throw new Error('Bạn chỉ có thể xóa playlist do mình tạo.');
+          }
+          if (!window.confirm(`Bạn có chắc muốn xóa playlist "${playlist.name}" không?`)) break;
+          await this.db.deletePlaylist(id);
+          await this.refreshPlaylists();
+          if (this.detailView?.type === 'playlist' &&
+              String(this.detailView.key) === String(id)) {
+            this.detailView = null;
+            this.currentTab = 'playlists';
+          }
+          this.render();
+          this.notify('Đã xóa playlist.');
+          break;
+        }
         case 'remove-playlist-song':
           await this.db.removeSongFromPlaylist(playlistId, id);
           await this.refreshPlaylists();
@@ -573,9 +593,14 @@ export class MusicApp {
 
   renderPlaylistCard(playlist) {
     const coverUrl = playlist.cover_url || './assets/covers/cover-06.svg';
-    return `<article class="album-card" data-open-playlist="${escapeHTML(playlist.id)}" tabindex="0" role="button" aria-label="Mở playlist ${escapeHTML(playlist.name)}">
-      <div class="album-cover-wrap"><img src="${escapeHTML(coverUrl)}" alt="" loading="lazy" /><span class="cover-play">▶</span></div>
-      <h3>${escapeHTML(playlist.name)}</h3><p>${(playlist.track_ids || []).length} bài hát</p>
+    const canDelete = this.db.demoMode ||
+      (this.authUser && String(playlist.user_id) === String(this.authUser.id));
+    return `<article class="album-card playlist-card">
+      <button class="playlist-card-open" type="button" data-action="open-playlist" data-id="${escapeHTML(playlist.id)}" aria-label="Mở playlist ${escapeHTML(playlist.name)}">
+        <div class="album-cover-wrap"><img src="${escapeHTML(coverUrl)}" alt="" loading="lazy" /><span class="cover-play">▶</span></div>
+        <h3>${escapeHTML(playlist.name)}</h3><p>${(playlist.track_ids || []).length} bài hát</p>
+      </button>
+      ${canDelete ? `<button class="playlist-delete-button" type="button" data-action="delete-playlist" data-id="${escapeHTML(playlist.id)}" aria-label="Xóa playlist ${escapeHTML(playlist.name)}" title="Xóa playlist">×</button>` : ''}
     </article>`;
   }
 
