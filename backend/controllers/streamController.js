@@ -4,8 +4,13 @@ const supabasePublic = require('../config/supabasePublic');
 const getStreamUrl = async (req, res) => {
     try {
         const songId = req.params.songId;
+        const numericSongId = Number(songId);
 
-        if (!/^[1-9]\\d*$/.test(songId)) {
+        if (
+            !Number.isSafeInteger(numericSongId) ||
+            numericSongId < 1 ||
+            String(numericSongId) !== songId
+        ) {
             return res.status(400).json({
                 message: 'A valid songId is required.'
             });
@@ -14,7 +19,7 @@ const getStreamUrl = async (req, res) => {
         const { data: song, error: songError } = await supabasePublic
             .from('songs')
             .select('song_id, title, audio_path, mime_type')
-            .eq('song_id', songId)
+            .eq('song_id', numericSongId)
             .maybeSingle();
 
         if (songError) {
@@ -46,11 +51,15 @@ const getStreamUrl = async (req, res) => {
             });
         }
 
-        // Chỉ cho phép URL HTTPS từ thư viện MP3 mẫu SoundHelix.
+        // Mỗi bài trong bộ dữ liệu hiện tại được gán một bản mẫu SoundHelix tương ứng.
+        const expectedPath = `/examples/mp3/SoundHelix-Song-${numericSongId - 8}.mp3`;
+
         if (
+            numericSongId < 9 ||
+            numericSongId > 16 ||
             audioUrl.protocol !== 'https:' ||
             audioUrl.hostname !== 'www.soundhelix.com' ||
-            !/^\\/examples\\/mp3\\/SoundHelix-Song-[1-8]\\.mp3$/.test(audioUrl.pathname)
+            audioUrl.pathname !== expectedPath
         ) {
             return res.status(400).json({
                 message: 'The audio URL is not an approved SoundHelix sample.'
