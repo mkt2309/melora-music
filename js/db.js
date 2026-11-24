@@ -250,6 +250,20 @@ export class MusicDB {
     return playlist;
   }
 
+  async deletePlaylist(playlistId) {
+    if (!this.demoMode) {
+      if (!readSession()?.access_token) throw new Error('Bạn cần đăng nhập để xóa playlist.');
+      await this.request(`/playlists/${encodeURIComponent(playlistId)}`, {
+        method: 'DELETE'
+      });
+      return;
+    }
+    const playlists = await this.getPlaylists();
+    const remaining = playlists.filter((playlist) => String(playlist.id) !== String(playlistId));
+    if (remaining.length === playlists.length) throw new Error('Không tìm thấy playlist.');
+    writeLocal(STORAGE_KEYS.playlists, remaining);
+  }
+
   async addSongToPlaylist(playlistId, songId) {
     if (!this.demoMode) {
       if (!readSession()?.access_token) throw new Error('Bạn cần đăng nhập để chỉnh sửa playlist.');
