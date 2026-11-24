@@ -295,3 +295,80 @@ button:focus-visible, input:focus-visible, [tabindex="0"]:focus-visible { outlin
 }
 
 .auth-form [hidden] { display: none !important; }
+
+/* Collapsible music player */
+body.player-hidden {
+  --player-height: 0px;
+  --player-clearance: 0px;
+}
+
+.player-bar {
+  transition: transform .28s ease, visibility .28s ease;
+}
+
+body.player-hidden .player-bar {
+  visibility: hidden;
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+.player-collapse-button {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 1px solid #eee7e0;
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+  color: #8f8176;
+  background: #fff;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.player-collapse-button:hover {
+  color: var(--orange-dark);
+  background: #fff7f0;
+}
+
+.player-expand-button {
+  position: fixed;
+  z-index: 31;
+  right: 20px;
+  bottom: 20px;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 50%;
+  color: #fff;
+  background: var(--orange);
+  box-shadow: 0 6px 20px rgba(90, 53, 28, .2);
+  font-size: 22px;
+  transition: transform .18s ease, background .18s ease;
+}
+
+.player-expand-button:hover {
+  transform: translateY(-2px);
+  background: var(--orange-dark);
+}
+
+.player-expand-button[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  .player-expand-button {
+    right: 14px;
+    bottom: 14px;
+    width: 44px;
+    height: 44px;
+  }
+}
