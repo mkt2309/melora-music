@@ -14,3 +14,7 @@ GRANT SELECT ON TABLE public.album_tracks TO anon, authenticated;
 GRANT SELECT ON TABLE public.song_artists TO anon, authenticated;
 GRANT SELECT ON TABLE public.album_artists TO anon, authenticated;
 GRANT SELECT ON TABLE public.song_genres TO anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON TABLE public.listening_history TO authenticated;
+GRANT SELECT, INSERT, DELETE ON TABLE public.favorites TO authenticated;
+GRANT SELECT, UPDATE ON TABLE public.profiles TO authenticated;
+GRANT INSERT ON TABLE public.playlists TO authenticated;
