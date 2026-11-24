@@ -1,8 +1,8 @@
-// Cấu hình chạy frontend.
-// DEMO_MODE = true: dùng dữ liệu mẫu trong trình duyệt.
-// Khi backend Node.js đã có API tương ứng, đổi thành false và cập nhật API_BASE_URL.
+
+// DEMO_MODE = true: sử dụng dữ liệu mẫu.
+// DEMO_MODE = false: sử dụng dữ liệu từ Backend API.
 export const CONFIG = Object.freeze({
-  DEMO_MODE: true,
+  DEMO_MODE: false,
   API_BASE_URL: 'http://localhost:3000/api',
   REQUEST_TIMEOUT_MS: 12000
 });
