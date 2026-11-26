@@ -1,6 +1,6 @@
 const supabase = require('../config/supabasePublic');
 
-// Lấy danh sách bài hát kèm nghệ sĩ, album và số lượt nghe
+// Lấy danh sách bài hát kèm nghệ sĩ, album và số lượt nghe hợp lệ
 const getSongs = async (req, res) => {
     try {
         const { data, error } = await supabase
@@ -40,13 +40,13 @@ const getSongs = async (req, res) => {
         }
 
         const { data: playCounts, error: playCountsError } = await supabase
-            .from('song_play_counts')
+            .from('song_rankings')
             .select('song_id, play_count');
 
         if (playCountsError) {
-            console.error('Get song play counts error:', playCountsError.message);
+            console.error('Get song rankings error:', playCountsError.message);
             return res.status(500).json({
-                message: 'Failed to retrieve song play counts.'
+                message: 'Failed to retrieve song rankings.'
             });
         }
 
