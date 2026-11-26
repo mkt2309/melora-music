@@ -482,8 +482,21 @@ const requestLeaderboardRefresh = () => {
 
 // API tương thích để có thể yêu cầu đóng cửa sổ và xử lý ngay.
 const processBatch = async () => {
-    const now = Date.now();
-    closeTumblingWindow(now);
+    const historyIds = [...activeWindowIds];
+    activeWindowIds.clear();
+
+    if (historyIds.length > 0) {
+        try {
+            await materializeTumblingWindows(historyIds);
+        } catch (error) {
+            for (const historyId of historyIds) {
+                activeWindowIds.add(historyId);
+            }
+
+            throw error;
+        }
+    }
+
     await drainCompletedWindows();
 };
 
