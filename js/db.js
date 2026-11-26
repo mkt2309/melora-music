@@ -302,15 +302,27 @@ export class MusicDB {
 
   async recordPlay(songId) {
     if (!this.demoMode) {
-      if (!readSession()?.access_token) return;
-      await this.request('/listening-history', {
+      if (!readSession()?.access_token) return null;
+      const payload = await this.request('/listening-history', {
         method: 'POST',
         body: JSON.stringify({ song_id: Number(songId) })
       });
-      return;
+      return payload?.history || null;
     }
     const history = readLocal(STORAGE_KEYS.history, []);
     writeLocal(STORAGE_KEYS.history, [songId, ...history.filter((id) => String(id) !== String(songId))].slice(0, 30));
+    return null;
+  }
+
+  async updateListeningProgress(historyId, listenedSeconds, completed = false) {
+    if (this.demoMode || !historyId) return null;
+    return this.request(`/listening-history/${encodeURIComponent(historyId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        listened_seconds: listenedSeconds,
+        completed
+      })
+    });
   }
 
   async getStreamUrl(song) {

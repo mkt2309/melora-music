@@ -14,6 +14,25 @@ export class MusicApp {
   constructor() {
     this.db = new MusicDB();
     this.engine = new AudioEngine();
+    this._listeningHistoryId = null;
+    this._listenedSeconds = 0;
+    this._lastAudioTime = null;
+    this._lastPersistedSeconds = 0;
+    this._listeningPersistPromise = null;
+
+    this.engine.addEventListener('play', (event) => {
+      this._lastAudioTime = event.detail.currentTime;
+    });
+    this.engine.addEventListener('timeupdate', (event) => {
+      this.trackListeningProgress(event.detail.currentTime);
+    });
+    this.engine.addEventListener('pause', () => {
+      this._lastAudioTime = null;
+      this.persistListeningProgress();
+    });
+    this.engine.addEventListener('ended', () => {
+      this.finishListening(true);
+    });
     this.tracks = [];
     this.playlists = [];
     this.albums = [];
@@ -344,14 +363,87 @@ export class MusicApp {
     return this.tracks.find((track) => String(track.id) === String(id));
   }
 
+  trackListeningProgress(currentTime) {
+    if (!this._listeningHistoryId || !Number.isFinite(currentTime)) return;
+
+    if (this._lastAudioTime !== null) {
+      const elapsed = currentTime - this._lastAudioTime;
+      if (elapsed > 0 && elapsed <= 2.5) {
+        this._listenedSeconds += elapsed;
+      }
+    }
+
+    this._lastAudioTime = currentTime;
+    if (Math.floor(this._listenedSeconds) >= this._lastPersistedSeconds + 5) {
+      this.persistListeningProgress();
+    }
+  }
+
+  async persistListeningProgress(completed = false) {
+    const historyId = this._listeningHistoryId;
+    if (!historyId) return false;
+
+    if (this._listeningPersistPromise) {
+      try {
+        await this._listeningPersistPromise;
+      } catch {
+        // The original request reports the error; this call may retry it.
+      }
+      if (this._listeningHistoryId !== historyId) return false;
+      return this.persistListeningProgress(completed);
+    }
+
+    const listenedSeconds = Math.floor(this._listenedSeconds);
+    if (!completed && listenedSeconds <= this._lastPersistedSeconds) return true;
+
+    const request = this.db.updateListeningProgress(historyId, listenedSeconds, completed);
+    this._listeningPersistPromise = request;
+    try {
+      await request;
+      this._lastPersistedSeconds = Math.max(this._lastPersistedSeconds, listenedSeconds);
+      return true;
+    } catch (error) {
+      this.notify('Không thể cập nhật tiến trình nghe: ' + error.message, 'error');
+      return false;
+    } finally {
+      if (this._listeningPersistPromise === request) {
+        this._listeningPersistPromise = null;
+      }
+    }
+  }
+
+  async finishListening(completed = false) {
+    const historyId = this._listeningHistoryId;
+    if (!historyId) return true;
+
+    const saved = await this.persistListeningProgress(completed);
+    if (saved && this._listeningHistoryId === historyId) {
+      this._listeningHistoryId = null;
+      this._listenedSeconds = 0;
+      this._lastAudioTime = null;
+      this._lastPersistedSeconds = 0;
+    }
+    return saved;
+  }
+
   async playTrack(id) {
+    const previousSaved = await this.finishListening(false);
+    if (!previousSaved) {
+      throw new Error('Chưa thể lưu tiến trình nghe trước đó. Hãy thử lại trước khi chuyển bài.');
+    }
     const track = this.getTrack(id);
     if (!track) throw new Error('Không tìm thấy bài hát.');
     const streamUrl = await this.db.getStreamUrl(track);
     await this.engine.load(track, streamUrl);
     await this.engine.play();
     this.queue = this.queue.length ? this.queue : [...this.tracks];
-    await this.db.recordPlay(track.id);
+    const historyRecord = await this.db.recordPlay(track.id);
+    if (historyRecord?.history_id) {
+      this._listeningHistoryId = historyRecord.history_id;
+      this._listenedSeconds = 0;
+      this._lastAudioTime = this.engine.getState().currentTime;
+      this._lastPersistedSeconds = 0;
+    }
     this.history = [String(track.id), ...this.history.filter((item) => item !== String(track.id))].slice(0, 30);
     this.updateNowPlaying(track);
     this.render();
