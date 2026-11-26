@@ -1,4 +1,8 @@
 const createUserClient = require('../config/supabaseUser');
+const {
+    enqueueListeningHistory,
+    requestLeaderboardRefresh
+} = require('../services/rankingBuffer');
 
 // Lấy lịch sử nghe nhạc
 const getListeningHistory = async (req, res) => {
@@ -160,6 +164,8 @@ const updateListeningHistory = async (req, res) => {
             });
         }
 
+        enqueueListeningHistory(data.history_id);
+
         res.json({
             message: 'Listening history updated successfully.',
             history: data
@@ -197,6 +203,8 @@ const deleteListeningHistory = async (req, res) => {
                 message: 'Failed to delete listening history.'
             });
         }
+
+        requestLeaderboardRefresh();
 
         res.json({
             message: 'Listening history deleted successfully.'
