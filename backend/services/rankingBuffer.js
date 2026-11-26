@@ -393,10 +393,12 @@ const drainCompletedWindows = async () => {
         }
 
         if (leaderboardRefreshRequested && completedWindows.length === 0) {
+            leaderboardRefreshRequested = false;
+
             try {
                 await refreshLeaderboard();
-                leaderboardRefreshRequested = false;
             } catch (error) {
+                leaderboardRefreshRequested = true;
                 console.error('Leaderboard refresh failed:', error.message);
             }
         }
