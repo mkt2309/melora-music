@@ -86,6 +86,9 @@ const addListeningHistory = async (req, res) => {
             });
         }
 
+        // Đưa history_id vào RAM Queue ngay sau khi lịch sử được lưu thành công.
+        enqueueListeningHistory(data.history_id);
+
         res.status(201).json({
             message: 'Listening history added successfully.',
             history: data
