@@ -372,3 +372,46 @@ body.player-hidden .player-bar {
     height: 44px;
   }
 }
+
+
+/* Song leaderboard */
+.ranking-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: -8px 0 24px;
+  padding: 12px 15px;
+  border: 1px solid #f3e6dc;
+  border-radius: 10px;
+  color: #897b70;
+  background: #fff9f4;
+  font-size: 11px;
+}
+.ranking-note span {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: #d96e36;
+  background: #ffeadc;
+  font-weight: 800;
+}
+.ranking-heading { margin-bottom: 19px; }
+.ranking-heading .button:disabled { opacity: .65; cursor: wait; }
+.ranking-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0 0 12px;
+  color: #a69c94;
+  font-size: 10px;
+}
+.ranking-summary strong { color: #51483f; font-size: 15px; }
+.ranking-refreshing { margin: 12px 0; color: #a69c94; font-size: 10px; }
+
+@media (max-width: 760px) {
+  .ranking-heading { align-items: flex-start; }
+  .ranking-heading .button { flex: 0 0 auto; }
+}
