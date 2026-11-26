@@ -49,7 +49,8 @@ const getRecentPlayContext = async (historyRows) => {
             )
         `)
         .in('user_id', userIds)
-        .gte('played_at', cutoff));
+        .gte('played_at', cutoff)
+        .order('history_id', { ascending: true }));
 
     const affectedPairs = new Set(
         historyRows.map((row) => `${row.user_id}:${row.song_id}`)
@@ -202,7 +203,8 @@ const processBatch = async () => {
                         duration_seconds
                     )
                 `)
-                .in('history_id', batch));
+                .in('history_id', batch)
+                .order('history_id', { ascending: true }));
 
             if (historyRows.length > 0) {
                 const { counts: recentPlayCounts, relatedRows } =
