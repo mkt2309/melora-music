@@ -1,6 +1,6 @@
 const supabase = require('../config/supabasePublic');
 
-// Lấy danh sách bài hát kèm nghệ sĩ và album liên quan
+// Lấy danh sách bài hát kèm nghệ sĩ, album và số lượt nghe
 const getSongs = async (req, res) => {
     try {
         const { data, error } = await supabase
@@ -39,6 +39,24 @@ const getSongs = async (req, res) => {
             });
         }
 
+        const { data: playCounts, error: playCountsError } = await supabase
+            .from('song_play_counts')
+            .select('song_id, play_count');
+
+        if (playCountsError) {
+            console.error('Get song play counts error:', playCountsError.message);
+            return res.status(500).json({
+                message: 'Failed to retrieve song play counts.'
+            });
+        }
+
+        const playCountBySongId = new Map(
+            (playCounts || []).map((item) => [
+                Number(item.song_id),
+                Number(item.play_count)
+            ])
+        );
+
         const keyword = String(req.query.q || '').trim().toLocaleLowerCase('vi');
 
         let songs = data.map((song) => {
@@ -73,7 +91,7 @@ const getSongs = async (req, res) => {
                 album: album?.title ?? '',
                 album_id: album?.album_id ?? null,
                 cover_url: album?.cover_url ?? null,
-                plays: 0
+                plays: playCountBySongId.get(Number(song.song_id)) || 0
             };
         });
 
