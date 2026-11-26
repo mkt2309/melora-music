@@ -363,7 +363,6 @@ const processWindow = async (windowBatch) => {
         }
     );
 
-    await refreshLeaderboard();
 };
 
 const drainCompletedWindows = async () => {
@@ -375,6 +374,8 @@ const drainCompletedWindows = async () => {
         const recovered = await ensureRecovery();
         if (!recovered) return;
 
+        let processedAnyWindow = false;
+
         while (completedWindows.length > 0) {
             completedWindows.sort((left, right) => new Date(left.windowStart) - new Date(right.windowStart));
             const currentWindow = completedWindows[0];
@@ -382,6 +383,7 @@ const drainCompletedWindows = async () => {
             try {
                 await processWindow(currentWindow);
                 completedWindows.shift();
+                processedAnyWindow = true;
             } catch (error) {
                 // Giữ nguyên cửa sổ lỗi ở đầu hàng đợi để thử lại.
                 // Upsert theo history_id giúp việc thử lại không nhân đôi event.
@@ -391,6 +393,10 @@ const drainCompletedWindows = async () => {
                 );
                 break;
             }
+        }
+
+        if (processedAnyWindow) {
+            leaderboardRefreshRequested = true;
         }
 
         if (leaderboardRefreshRequested && completedWindows.length === 0) {
