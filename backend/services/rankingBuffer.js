@@ -68,10 +68,10 @@ const getRecentPlayContext = async (historyRows, windowStartMs, windowEndMs) => 
     const userIds = [...new Set(historyRows.map((row) => row.user_id))];
 
     if (userIds.length === 0) {
-        return { counts: new Map(), relatedRows: [] };
+        return new Map();
     }
 
-    // Đếm hành vi trong 60 giây kết thúc tại cuối Tumbling Window đang xét.
+    // Đếm lượt nghe trong 60 giây kết thúc tại cuối Tumbling Window đang xét.
     const cutoff = new Date(windowStartMs - 60_000).toISOString();
     const windowEnd = new Date(windowEndMs).toISOString();
     const recentRows = [];
@@ -80,16 +80,7 @@ const getRecentPlayContext = async (historyRows, windowStartMs, windowEndMs) => 
         const userChunk = userIds.slice(i, i + QUERY_CHUNK_SIZE);
         const chunkRows = await fetchAllRows(() => supabase
             .from('listening_history')
-            .select(`
-                history_id,
-                user_id,
-                song_id,
-                listened_seconds,
-                completed,
-                songs (
-                    duration_seconds
-                )
-            `)
+            .select('user_id, song_id')
             .in('user_id', userChunk)
             .gte('played_at', cutoff)
             .lt('played_at', windowEnd)
@@ -98,12 +89,6 @@ const getRecentPlayContext = async (historyRows, windowStartMs, windowEndMs) => 
         recentRows.push(...chunkRows);
     }
 
-    const affectedPairs = new Set(
-        historyRows.map((row) => `${row.user_id}:${row.song_id}`)
-    );
-    const relatedRows = recentRows.filter((row) =>
-        affectedPairs.has(`${row.user_id}:${row.song_id}`)
-    );
     const counts = new Map();
 
     for (const row of recentRows) {
@@ -111,7 +96,7 @@ const getRecentPlayContext = async (historyRows, windowStartMs, windowEndMs) => 
         counts.set(key, (counts.get(key) || 0) + 1);
     }
 
-    return { counts, relatedRows };
+    return counts;
 };
 
 const getWindowSpamReasons = (historyRows) => {
@@ -326,29 +311,14 @@ const processWindow = async (windowBatch) => {
 
     if (historyRows.length === 0) return;
 
-    const { counts: recentPlayCounts, relatedRows } =
+    const recentPlayCounts =
         await getRecentPlayContext(historyRows, windowStartMs, windowEndMs);
-
     const windowSpamReasons = getWindowSpamReasons(historyRows);
-    const batchIds = new Set(historyRows.map((row) => row.history_id));
-    const rowsByHistoryId = new Map();
-
-    for (const row of historyRows) {
-        rowsByHistoryId.set(row.history_id, row);
-    }
-
-    // Đánh giá lại các lượt nghe cùng user/song trong 60 giây
-    // để giữ nguyên chính sách chống spam hiện tại của Melora.
-    for (const row of relatedRows) {
-        rowsByHistoryId.set(row.history_id, row);
-    }
 
     const evaluatedAt = new Date().toISOString();
-    const rankingEvents = [...rowsByHistoryId.values()].map((row) => {
+    const rankingEvents = historyRows.map((row) => {
         const key = `${row.user_id}:${row.song_id}`;
-        const windowSpamReason = batchIds.has(row.history_id)
-            ? windowSpamReasons.get(row.user_id) || null
-            : null;
+        const windowSpamReason = windowSpamReasons.get(row.user_id) || null;
         const result = classifyListening(
             row,
             recentPlayCounts.get(key) || 0,
