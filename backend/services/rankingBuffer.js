@@ -64,14 +64,16 @@ const fetchHistoryRows = async (historyIds) => {
     return rows;
 };
 
-const getRecentPlayContext = async (historyRows) => {
+const getRecentPlayContext = async (historyRows, windowStartMs, windowEndMs) => {
     const userIds = [...new Set(historyRows.map((row) => row.user_id))];
 
     if (userIds.length === 0) {
         return { counts: new Map(), relatedRows: [] };
     }
 
-    const cutoff = new Date(Date.now() - 60_000).toISOString();
+    // Đếm hành vi trong 60 giây kết thúc tại cuối Tumbling Window đang xét.
+    const cutoff = new Date(windowStartMs - 60_000).toISOString();
+    const windowEnd = new Date(windowEndMs).toISOString();
     const recentRows = [];
 
     for (let i = 0; i < userIds.length; i += QUERY_CHUNK_SIZE) {
@@ -90,6 +92,7 @@ const getRecentPlayContext = async (historyRows) => {
             `)
             .in('user_id', userChunk)
             .gte('played_at', cutoff)
+            .lt('played_at', windowEnd)
             .order('history_id', { ascending: true }));
 
         recentRows.push(...chunkRows);
@@ -111,8 +114,6 @@ const getRecentPlayContext = async (historyRows) => {
     return { counts, relatedRows };
 };
 
-// Phát hiện người dùng gửi quá nhiều lượt nghe và tập trung vào một bài
-// trong cùng một Tumbling Window 2 giây.
 const getWindowSpamReasons = (historyRows) => {
     const rowsByUser = new Map();
 
@@ -292,12 +293,41 @@ const ensureRecovery = async () => {
 };
 
 const processWindow = async (windowBatch) => {
-    const historyRows = await fetchHistoryRows(windowBatch.historyIds);
+    const windowStartMs = new Date(windowBatch.windowStart).getTime();
+    const windowEndMs = new Date(windowBatch.windowEnd).getTime();
+    const windowStart = new Date(windowStartMs).toISOString();
+    const windowEnd = new Date(windowEndMs).toISOString();
+    const historyRows = [];
+
+    // Lấy toàn bộ lượt nghe của các user trong cửa sổ event-time,
+    // không chỉ các ID vừa được đưa vào Queue.
+    for (let i = 0; i < windowBatch.userIds.length; i += QUERY_CHUNK_SIZE) {
+        const userChunk = windowBatch.userIds.slice(i, i + QUERY_CHUNK_SIZE);
+        const chunkRows = await fetchAllRows(() => supabase
+            .from('listening_history')
+            .select(`
+                history_id,
+                user_id,
+                song_id,
+                played_at,
+                listened_seconds,
+                completed,
+                songs (
+                    duration_seconds
+                )
+            `)
+            .in('user_id', userChunk)
+            .gte('played_at', windowStart)
+            .lt('played_at', windowEnd)
+            .order('history_id', { ascending: true }));
+
+        historyRows.push(...chunkRows);
+    }
 
     if (historyRows.length === 0) return;
 
     const { counts: recentPlayCounts, relatedRows } =
-        await getRecentPlayContext(historyRows);
+        await getRecentPlayContext(historyRows, windowStartMs, windowEndMs);
 
     const windowSpamReasons = getWindowSpamReasons(historyRows);
     const batchIds = new Set(historyRows.map((row) => row.history_id));
@@ -355,8 +385,8 @@ const processWindow = async (windowBatch) => {
     console.log(
         'Ranking tumbling window processed:',
         {
-            windowStart: windowBatch.windowStart,
-            windowEnd: windowBatch.windowEnd,
+            windowStart,
+            windowEnd,
             events: rankingEvents.length,
             spamUsers: windowSpamReasons.size,
             ...summary
@@ -376,6 +406,7 @@ const drainCompletedWindows = async () => {
         if (!recovered) return;
 
         while (completedWindows.length > 0) {
+            completedWindows.sort((left, right) => new Date(left.windowStart) - new Date(right.windowStart));
             const currentWindow = completedWindows[0];
 
             try {
@@ -407,16 +438,54 @@ const drainCompletedWindows = async () => {
     }
 };
 
-const closeTumblingWindow = (windowEnd) => {
+const materializeTumblingWindows = async (historyIds) => {
+    const queuedRows = await fetchHistoryRows(historyIds);
+    const groups = new Map();
+
+    // Gán từng lượt nghe vào một cửa sổ cố định, không chồng lấn,
+    // dựa trên played_at (event time) đã được PostgreSQL lưu.
+    for (const row of queuedRows) {
+        const playedAtMs = new Date(row.played_at).getTime();
+        if (!Number.isFinite(playedAtMs)) continue;
+
+        const windowStartMs = Math.floor(playedAtMs / WINDOW_MS) * WINDOW_MS;
+        let group = groups.get(windowStartMs);
+
+        if (!group) {
+            group = { userIds: new Set() };
+            groups.set(windowStartMs, group);
+        }
+
+        group.userIds.add(row.user_id);
+    }
+
+    const orderedWindows = [...groups.entries()]
+        .sort(([left], [right]) => left - right);
+
+    for (const [windowStartMs, group] of orderedWindows) {
+        completedWindows.push({
+            windowStart: new Date(windowStartMs).toISOString(),
+            windowEnd: new Date(windowStartMs + WINDOW_MS).toISOString(),
+            userIds: [...group.userIds]
+        });
+    }
+};
+
+const closeTumblingWindow = () => {
     const historyIds = [...activeWindowIds];
     activeWindowIds.clear();
 
     if (historyIds.length > 0) {
-        completedWindows.push({
-            windowStart: new Date(windowEnd - WINDOW_MS).toISOString(),
-            windowEnd: new Date(windowEnd).toISOString(),
-            historyIds
-        });
+        materializeTumblingWindows(historyIds)
+            .then(() => drainCompletedWindows())
+            .catch((error) => {
+                // Nếu không đọc được played_at để tạo window, đưa ID trở lại Queue.
+                for (const historyId of historyIds) {
+                    activeWindowIds.add(historyId);
+                }
+
+                console.error('Ranking window materialization failed:', error.message);
+            });
     }
 
     void drainCompletedWindows();
