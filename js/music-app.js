@@ -18,8 +18,7 @@ export class MusicApp {
     this._listenedSeconds = 0;
     this._lastAudioTime = null;
     this._lastPersistedSeconds = 0;
-    this._persistingListening = false;
-    this._pendingListeningPersist = false;
+    this._listeningPersistPromise = null;
 
     this.engine.addEventListener('play', (event) => {
       this._lastAudioTime = event.detail.currentTime;
@@ -382,29 +381,28 @@ export class MusicApp {
 
   async persistListeningProgress(completed = false) {
     const historyId = this._listeningHistoryId;
-    if (!historyId) return;
+    if (!historyId) return false;
 
-    if (this._persistingListening) {
-      this._pendingListeningPersist = true;
-      return;
+    if (this._listeningPersistPromise) {
+      await this._listeningPersistPromise;
+      if (this._listeningHistoryId !== historyId) return false;
     }
 
     const listenedSeconds = Math.floor(this._listenedSeconds);
-    if (!completed && listenedSeconds <= this._lastPersistedSeconds) return;
+    if (!completed && listenedSeconds <= this._lastPersistedSeconds) return true;
 
-    this._persistingListening = true;
+    const request = this.db.updateListeningProgress(historyId, listenedSeconds, completed);
+    this._listeningPersistPromise = request;
     try {
-      await this.db.updateListeningProgress(historyId, listenedSeconds, completed);
+      await request;
       this._lastPersistedSeconds = Math.max(this._lastPersistedSeconds, listenedSeconds);
+      return true;
     } catch (error) {
       this.notify('Không thể cập nhật tiến trình nghe: ' + error.message, 'error');
+      return false;
     } finally {
-      this._persistingListening = false;
-      if (this._pendingListeningPersist) {
-        this._pendingListeningPersist = false;
-        if (this._listeningHistoryId === historyId) {
-          this.persistListeningProgress();
-        }
+      if (this._listeningPersistPromise === request) {
+        this._listeningPersistPromise = null;
       }
     }
   }
@@ -413,13 +411,12 @@ export class MusicApp {
     const historyId = this._listeningHistoryId;
     if (!historyId) return;
 
-    await this.persistListeningProgress(completed);
-    if (this._listeningHistoryId === historyId) {
+    const saved = await this.persistListeningProgress(completed);
+    if (saved && this._listeningHistoryId === historyId) {
       this._listeningHistoryId = null;
       this._listenedSeconds = 0;
       this._lastAudioTime = null;
       this._lastPersistedSeconds = 0;
-      this._pendingListeningPersist = false;
     }
   }
 
