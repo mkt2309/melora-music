@@ -384,8 +384,13 @@ export class MusicApp {
     if (!historyId) return false;
 
     if (this._listeningPersistPromise) {
-      await this._listeningPersistPromise;
+      try {
+        await this._listeningPersistPromise;
+      } catch {
+        // The original request reports the error; this call may retry it.
+      }
       if (this._listeningHistoryId !== historyId) return false;
+      return this.persistListeningProgress(completed);
     }
 
     const listenedSeconds = Math.floor(this._listenedSeconds);
@@ -409,7 +414,7 @@ export class MusicApp {
 
   async finishListening(completed = false) {
     const historyId = this._listeningHistoryId;
-    if (!historyId) return;
+    if (!historyId) return true;
 
     const saved = await this.persistListeningProgress(completed);
     if (saved && this._listeningHistoryId === historyId) {
@@ -418,10 +423,14 @@ export class MusicApp {
       this._lastAudioTime = null;
       this._lastPersistedSeconds = 0;
     }
+    return saved;
   }
 
   async playTrack(id) {
-    await this.finishListening(false);
+    const previousSaved = await this.finishListening(false);
+    if (!previousSaved) {
+      throw new Error('Chưa thể lưu tiến trình nghe trước đó. Hãy thử lại trước khi chuyển bài.');
+    }
     const track = this.getTrack(id);
     if (!track) throw new Error('Không tìm thấy bài hát.');
     const streamUrl = await this.db.getStreamUrl(track);
