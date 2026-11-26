@@ -18,3 +18,11 @@ GRANT SELECT, INSERT, DELETE ON TABLE public.listening_history TO authenticated;
 GRANT SELECT, INSERT, DELETE ON TABLE public.favorites TO authenticated;
 GRANT SELECT, UPDATE ON TABLE public.profiles TO authenticated;
 GRANT INSERT, DELETE ON TABLE public.playlists TO authenticated;
+GRANT UPDATE ON TABLE public.listening_history TO authenticated;
+
+CREATE POLICY "Users can update own listening history"
+ON public.listening_history
+FOR UPDATE
+TO authenticated
+USING ((SELECT auth.uid()) = user_id)
+WITH CHECK ((SELECT auth.uid()) = user_id);
