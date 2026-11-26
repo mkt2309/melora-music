@@ -26,8 +26,13 @@ const streamRoutes = require('./routes/streamRoutes');
 
 const app = express();
 
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5500')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL
+    origin: allowedOrigins
 }));
 
 app.use(express.json());
