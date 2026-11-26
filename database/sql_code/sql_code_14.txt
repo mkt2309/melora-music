@@ -24,6 +24,10 @@ CREATE INDEX ranking_events_user_song_time_idx
 
 ALTER TABLE public.ranking_events ENABLE ROW LEVEL SECURITY;
 
+-- Backend dùng SUPABASE_SECRET_KEY cần đọc dữ liệu nguồn để đánh giá lượt nghe.
+GRANT SELECT ON TABLE public.listening_history TO service_role;
+GRANT SELECT ON TABLE public.songs TO service_role;
+
 -- Chỉ backend dùng SUPABASE_SECRET_KEY được phép đọc/ghi sự kiện đã đánh giá.
 REVOKE ALL ON TABLE public.ranking_events FROM PUBLIC, anon, authenticated;
 GRANT ALL ON TABLE public.ranking_events TO service_role;
