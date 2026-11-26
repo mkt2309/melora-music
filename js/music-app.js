@@ -7,6 +7,7 @@ import { bindPlayer } from './player.js';
 
 const PAGE_LABELS = {
   songs: 'Khám phá', albums: 'Album', artists: 'Nghệ sĩ',
+  ranking: 'Bảng xếp hạng',
   playlists: 'Playlist của tôi', favorites: 'Yêu thích', history: 'Nghe gần đây'
 };
 
@@ -39,6 +40,9 @@ export class MusicApp {
     this.artists = [];
     this.favorites = new Set();
     this.history = [];
+    this.leaderboard = [];
+    this._leaderboardLoading = false;
+    this._leaderboardError = null;
     this.artCache = new Map();
     this.currentTab = 'songs';
     this.detailView = null; // { type: 'album'|'playlist', key: string|number }
@@ -288,6 +292,22 @@ export class MusicApp {
     const search = document.getElementById('global-search');
     if (search) search.value = '';
     this.render();
+    if (tab === 'ranking') this.loadLeaderboard();
+  }
+
+  async loadLeaderboard() {
+    this._leaderboardLoading = true;
+    this._leaderboardError = null;
+    if (this.currentTab === 'ranking') this.render();
+
+    try {
+      this.leaderboard = await this.db.getLeaderboard(50);
+    } catch (error) {
+      this._leaderboardError = error.message || 'Không thể tải bảng xếp hạng.';
+    } finally {
+      this._leaderboardLoading = false;
+      if (this.currentTab === 'ranking') this.render();
+    }
   }
 
   async handleContentClick(event) {
@@ -310,6 +330,7 @@ export class MusicApp {
     const { action: type, id, playlistId } = action.dataset;
     try {
       switch (type) {
+        case 'refresh-ranking': await this.loadLeaderboard(); break;
         case 'play': await this.playTrack(id); break;
         case 'favorite': await this.toggleFavorite(id); break;
         case 'add-playlist': this.openPlaylistModal(id); break;
@@ -620,6 +641,7 @@ export class MusicApp {
     if (this.detailView?.type === 'album') content.innerHTML = this.renderAlbumDetail();
     else if (this.detailView?.type === 'playlist') content.innerHTML = this.renderPlaylistDetail();
     else if (this.currentTab === 'songs') content.innerHTML = this.renderSongsPage();
+    else if (this.currentTab === 'ranking') content.innerHTML = this.renderLeaderboardPage();
     else if (this.currentTab === 'albums') content.innerHTML = this.renderAlbumsPage();
     else if (this.currentTab === 'artists') content.innerHTML = this.renderArtistsPage();
     else if (this.currentTab === 'playlists') content.innerHTML = this.renderPlaylistsPage();
@@ -649,6 +671,52 @@ export class MusicApp {
       ${filtered.length ? this.renderTrackTable(filtered) : this.emptyState('Không tìm thấy bài hát', 'Thử một từ khóa khác nhé.')}
       <div class="section-heading lower-heading"><div><p class="eyebrow">GỢI Ý CHO BẠN</p><h2>Album đáng nghe</h2></div><button class="text-button" type="button" data-nav="albums">Xem tất cả <span>→</span></button></div>
       ${this.renderAlbumCards(this.albums.slice(0, 4))}`;
+  }
+
+  renderLeaderboardPage() {
+    const heading = `
+      <div class="page-heading ranking-heading">
+        <div>
+          <p class="eyebrow">MELORA MUSIC CHART</p>
+          <h1>Bảng xếp hạng</h1>
+          <p>Những bài hát có lượt nghe hợp lệ cao nhất.</p>
+        </div>
+        <button class="button button-primary" type="button" data-action="refresh-ranking" ${this._leaderboardLoading ? 'disabled' : ''}>
+          ${this._leaderboardLoading ? 'Đang cập nhật…' : '↻ Làm mới'}
+        </button>
+      </div>
+      <div class="ranking-note"><span>✓</span> Chỉ tính lượt nghe được bộ đệm xác nhận hợp lệ.</div>`;
+
+    if (this._leaderboardLoading && !this.leaderboard.length) {
+      return `${heading}<div class="loading-state"><span class="loading-spinner"></span>Đang tải bảng xếp hạng...</div>`;
+    }
+
+    if (this._leaderboardError) {
+      return `${heading}${this.emptyState('Không tải được bảng xếp hạng', this._leaderboardError, 'Thử lại', 'data-action="refresh-ranking"')}`;
+    }
+
+    const tracks = this.leaderboard.map((item) => {
+      const existingTrack = this.getTrack(item.song_id);
+      return {
+        ...(existingTrack || {}),
+        id: item.song_id,
+        title: item.title || existingTrack?.title || 'Bài hát không xác định',
+        artist: item.artist || existingTrack?.artist || 'Nghệ sĩ chưa rõ',
+        duration_seconds: item.duration_seconds ?? existingTrack?.duration_seconds ?? existingTrack?.duration ?? null,
+        plays: Number(item.play_count || 0),
+        album: existingTrack?.album || '',
+        cover_url: existingTrack?.cover_url || null
+      };
+    });
+
+    if (!tracks.length) {
+      return `${heading}${this.emptyState('Chưa có dữ liệu xếp hạng', 'Bảng xếp hạng sẽ xuất hiện khi hệ thống ghi nhận các lượt nghe hợp lệ.')}`;
+    }
+
+    return `${heading}
+      <div class="ranking-summary"><strong>${tracks.length}</strong><span>bài hát đang được xếp hạng</span></div>
+      ${this.renderTrackTable(tracks)}
+      ${this._leaderboardLoading ? '<p class="ranking-refreshing">Đang cập nhật dữ liệu mới…</p>' : ''}`;
   }
 
   renderTrackCollectionPage(type) {
