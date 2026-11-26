@@ -33,17 +33,15 @@ const getRecentPlayCounts = async (historyRows) => {
     if (userIds.length === 0) return new Map();
 
     const cutoff = new Date(Date.now() - 60_000).toISOString();
-    const { data, error } = await supabase
+    const recentRows = await fetchAllRows(() => supabase
         .from('listening_history')
         .select('user_id, song_id')
         .in('user_id', userIds)
-        .gte('played_at', cutoff);
-
-    if (error) throw error;
+        .gte('played_at', cutoff));
 
     const counts = new Map();
 
-    for (const row of data || []) {
+    for (const row of recentRows) {
         const key = `${row.user_id}:${row.song_id}`;
         counts.set(key, (counts.get(key) || 0) + 1);
     }
