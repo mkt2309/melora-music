@@ -180,6 +180,30 @@ export class MusicDB {
       `${track.title} ${track.artist} ${track.album}`.toLocaleLowerCase('vi').includes(keyword));
   }
 
+  async getLeaderboard(limit = 50) {
+    const safeLimit = Number.isInteger(Number(limit)) && Number(limit) > 0
+      ? Math.min(Number(limit), 100)
+      : 50;
+
+    if (this.demoMode) {
+      const tracks = await this.getSongs();
+      return tracks
+        .map((track) => ({
+          song_id: track.id,
+          title: track.title,
+          artist: track.artist,
+          duration_seconds: track.duration_seconds ?? track.duration ?? null,
+          play_count: Number(track.plays || 0)
+        }))
+        .sort((a, b) => b.play_count - a.play_count)
+        .slice(0, safeLimit)
+        .map((item, index) => ({ ...item, rank: index + 1 }));
+    }
+
+    const payload = await this.request(`/ranking/leaderboard?limit=${safeLimit}`);
+    return Array.isArray(payload?.ranking) ? payload.ranking : [];
+  }
+
   async getAlbums() {
     return this.demoMode ? [...demoAlbums] : unwrap(await this.request('/albums'), 'albums');
   }
