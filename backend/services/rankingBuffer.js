@@ -7,6 +7,7 @@ const PAGE_SIZE = 1000;
 const pendingHistoryIds = new Set();
 let isProcessing = false;
 let leaderboardRefreshRequested = false;
+let recoveryPromise = Promise.resolve();
 
 const fetchAllRows = async (buildQuery) => {
     const rows = [];
@@ -27,18 +28,35 @@ const fetchAllRows = async (buildQuery) => {
     return rows;
 };
 
-const getRecentPlayCounts = async (historyRows) => {
+const getRecentPlayContext = async (historyRows) => {
     const userIds = [...new Set(historyRows.map((row) => row.user_id))];
 
-    if (userIds.length === 0) return new Map();
+    if (userIds.length === 0) {
+        return { counts: new Map(), relatedRows: [] };
+    }
 
     const cutoff = new Date(Date.now() - 60_000).toISOString();
     const recentRows = await fetchAllRows(() => supabase
         .from('listening_history')
-        .select('user_id, song_id')
+        .select(`
+            history_id,
+            user_id,
+            song_id,
+            listened_seconds,
+            completed,
+            songs (
+                duration_seconds
+            )
+        `)
         .in('user_id', userIds)
         .gte('played_at', cutoff));
 
+    const affectedPairs = new Set(
+        historyRows.map((row) => `${row.user_id}:${row.song_id}`)
+    );
+    const relatedRows = recentRows.filter((row) =>
+        affectedPairs.has(`${row.user_id}:${row.song_id}`)
+    );
     const counts = new Map();
 
     for (const row of recentRows) {
@@ -46,7 +64,7 @@ const getRecentPlayCounts = async (historyRows) => {
         counts.set(key, (counts.get(key) || 0) + 1);
     }
 
-    return counts;
+    return { counts, relatedRows };
 };
 
 const classifyListening = (row, recentPlayCount) => {
@@ -119,7 +137,45 @@ const refreshLeaderboard = async () => {
     if (error) throw error;
 };
 
+const recoverPendingHistory = async () => {
+    try {
+        const [historyRows, rankingEvents] = await Promise.all([
+            fetchAllRows(() => supabase
+                .from('listening_history')
+                .select('history_id, listened_seconds, completed')
+                .order('history_id', { ascending: true })),
+            fetchAllRows(() => supabase
+                .from('ranking_events')
+                .select('history_id, listened_seconds, completed')
+                .order('history_id', { ascending: true }))
+        ]);
+
+        const evaluatedByHistoryId = new Map(
+            rankingEvents.map((event) => [event.history_id, event])
+        );
+
+        for (const history of historyRows) {
+            if (history.listened_seconds === null && !history.completed) continue;
+
+            const evaluated = evaluatedByHistoryId.get(history.history_id);
+            const currentSeconds = Number(history.listened_seconds || 0);
+
+            if (
+                !evaluated ||
+                Number(evaluated.listened_seconds) !== currentSeconds ||
+                Boolean(evaluated.completed) !== Boolean(history.completed)
+            ) {
+                pendingHistoryIds.add(history.history_id);
+            }
+        }
+    } catch (error) {
+        console.error('Ranking queue recovery failed:', error.message);
+    }
+};
+
 const processBatch = async () => {
+    await recoveryPromise;
+
     if (isProcessing || (pendingHistoryIds.size === 0 && !leaderboardRefreshRequested)) {
         return;
     }
@@ -134,7 +190,7 @@ const processBatch = async () => {
 
     try {
         if (batch.length > 0) {
-            const { data: historyRows, error } = await supabase
+            const historyRows = await fetchAllRows(() => supabase
                 .from('listening_history')
                 .select(`
                     history_id,
@@ -146,15 +202,24 @@ const processBatch = async () => {
                         duration_seconds
                     )
                 `)
-                .in('history_id', batch);
+                .in('history_id', batch));
 
-            if (error) throw error;
+            if (historyRows.length > 0) {
+                const { counts: recentPlayCounts, relatedRows } =
+                    await getRecentPlayContext(historyRows);
 
-            if (historyRows && historyRows.length > 0) {
-                const recentPlayCounts = await getRecentPlayCounts(historyRows);
+                const rowsByHistoryId = new Map();
+
+                for (const row of historyRows) {
+                    rowsByHistoryId.set(row.history_id, row);
+                }
+
+                for (const row of relatedRows) {
+                    rowsByHistoryId.set(row.history_id, row);
+                }
+
                 const evaluatedAt = new Date().toISOString();
-
-                const rankingEvents = historyRows.map((row) => {
+                const rankingEvents = [...rowsByHistoryId.values()].map((row) => {
                     const key = `${row.user_id}:${row.song_id}`;
                     const result = classifyListening(
                         row,
@@ -173,11 +238,11 @@ const processBatch = async () => {
                     };
                 });
 
-                const { error: upsertError } = await supabase
+                const { error } = await supabase
                     .from('ranking_events')
                     .upsert(rankingEvents, { onConflict: 'history_id' });
 
-                if (upsertError) throw upsertError;
+                if (error) throw error;
 
                 const summary = rankingEvents.reduce((result, event) => {
                     result[event.status] += 1;
@@ -220,6 +285,10 @@ const enqueueListeningHistory = (historyId) => {
 const requestLeaderboardRefresh = () => {
     leaderboardRefreshRequested = true;
 };
+
+// Rebuild the queue from persisted listening data after a backend restart.
+recoveryPromise = recoverPendingHistory();
+leaderboardRefreshRequested = true;
 
 const windowTimer = setInterval(() => {
     processBatch();
