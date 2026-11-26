@@ -1,13 +1,22 @@
 const supabase = require('../config/supabase');
 
-const WINDOW_MS = 10_000;
+const WINDOW_MS = 2_000;
+const BOT_REQ_THRESHOLD = 40;
+const BOT_FOCUS_THRESHOLD = 0.70;
 const MAX_PLAYS_PER_USER_SONG_PER_MINUTE = 5;
 const PAGE_SIZE = 1000;
+const QUERY_CHUNK_SIZE = 500;
+const UPSERT_CHUNK_SIZE = 500;
 
-const pendingHistoryIds = new Set();
+// Queue RAM chứa history_id của các lượt nghe cần đánh giá.
+const activeWindowIds = new Set();
+
+// Các cửa sổ đã đóng được xử lý lần lượt, không chạy chồng lấn.
+const completedWindows = [];
+
 let isProcessing = false;
-let leaderboardRefreshRequested = false;
-let recoveryPromise = Promise.resolve();
+let recoveryComplete = false;
+let leaderboardRefreshRequested = true;
 
 const fetchAllRows = async (buildQuery) => {
     const rows = [];
@@ -28,6 +37,33 @@ const fetchAllRows = async (buildQuery) => {
     return rows;
 };
 
+const fetchHistoryRows = async (historyIds) => {
+    const rows = [];
+
+    for (let i = 0; i < historyIds.length; i += QUERY_CHUNK_SIZE) {
+        const idChunk = historyIds.slice(i, i + QUERY_CHUNK_SIZE);
+        const chunkRows = await fetchAllRows(() => supabase
+            .from('listening_history')
+            .select(`
+                history_id,
+                user_id,
+                song_id,
+                played_at,
+                listened_seconds,
+                completed,
+                songs (
+                    duration_seconds
+                )
+            `)
+            .in('history_id', idChunk)
+            .order('history_id', { ascending: true }));
+
+        rows.push(...chunkRows);
+    }
+
+    return rows;
+};
+
 const getRecentPlayContext = async (historyRows) => {
     const userIds = [...new Set(historyRows.map((row) => row.user_id))];
 
@@ -36,21 +72,28 @@ const getRecentPlayContext = async (historyRows) => {
     }
 
     const cutoff = new Date(Date.now() - 60_000).toISOString();
-    const recentRows = await fetchAllRows(() => supabase
-        .from('listening_history')
-        .select(`
-            history_id,
-            user_id,
-            song_id,
-            listened_seconds,
-            completed,
-            songs (
-                duration_seconds
-            )
-        `)
-        .in('user_id', userIds)
-        .gte('played_at', cutoff)
-        .order('history_id', { ascending: true }));
+    const recentRows = [];
+
+    for (let i = 0; i < userIds.length; i += QUERY_CHUNK_SIZE) {
+        const userChunk = userIds.slice(i, i + QUERY_CHUNK_SIZE);
+        const chunkRows = await fetchAllRows(() => supabase
+            .from('listening_history')
+            .select(`
+                history_id,
+                user_id,
+                song_id,
+                listened_seconds,
+                completed,
+                songs (
+                    duration_seconds
+                )
+            `)
+            .in('user_id', userChunk)
+            .gte('played_at', cutoff)
+            .order('history_id', { ascending: true }));
+
+        recentRows.push(...chunkRows);
+    }
 
     const affectedPairs = new Set(
         historyRows.map((row) => `${row.user_id}:${row.song_id}`)
@@ -68,7 +111,57 @@ const getRecentPlayContext = async (historyRows) => {
     return { counts, relatedRows };
 };
 
-const classifyListening = (row, recentPlayCount) => {
+// Phát hiện người dùng gửi quá nhiều lượt nghe và tập trung vào một bài
+// trong cùng một Tumbling Window 2 giây.
+const getWindowSpamReasons = (historyRows) => {
+    const rowsByUser = new Map();
+
+    for (const row of historyRows) {
+        if (!rowsByUser.has(row.user_id)) {
+            rowsByUser.set(row.user_id, []);
+        }
+
+        rowsByUser.get(row.user_id).push(row);
+    }
+
+    const spamReasons = new Map();
+
+    for (const [userId, rows] of rowsByUser) {
+        if (rows.length <= BOT_REQ_THRESHOLD) continue;
+
+        const songCounts = new Map();
+
+        for (const row of rows) {
+            songCounts.set(
+                row.song_id,
+                (songCounts.get(row.song_id) || 0) + 1
+            );
+        }
+
+        let topSongCount = 0;
+        let topSongId = null;
+
+        for (const [songId, count] of songCounts) {
+            if (count > topSongCount) {
+                topSongCount = count;
+                topSongId = songId;
+            }
+        }
+
+        const focusRatio = topSongCount / rows.length;
+
+        if (focusRatio >= BOT_FOCUS_THRESHOLD) {
+            spamReasons.set(
+                userId,
+                `tumbling_window_spam_over_40_requests_70_percent_song_${topSongId}`
+            );
+        }
+    }
+
+    return spamReasons;
+};
+
+const classifyListening = (row, recentPlayCount, windowSpamReason = null) => {
     const listenedSeconds = Number(row.listened_seconds || 0);
     const durationSeconds = Number(row.songs?.duration_seconds || 0);
 
@@ -76,6 +169,13 @@ const classifyListening = (row, recentPlayCount) => {
         return {
             status: 'rejected',
             reason: 'listened_time_exceeds_song_duration'
+        };
+    }
+
+    if (windowSpamReason) {
+        return {
+            status: 'suspicious',
+            reason: windowSpamReason
         };
     }
 
@@ -131,11 +231,15 @@ const refreshLeaderboard = async () => {
         updated_at: updatedAt
     }));
 
-    const { error } = await supabase
-        .from('song_rankings')
-        .upsert(rankingRows, { onConflict: 'song_id' });
+    for (let i = 0; i < rankingRows.length; i += UPSERT_CHUNK_SIZE) {
+        const { error } = await supabase
+            .from('song_rankings')
+            .upsert(rankingRows.slice(i, i + UPSERT_CHUNK_SIZE), {
+                onConflict: 'song_id'
+            });
 
-    if (error) throw error;
+        if (error) throw error;
+    }
 };
 
 const recoverPendingHistory = async () => {
@@ -156,149 +260,202 @@ const recoverPendingHistory = async () => {
         );
 
         for (const history of historyRows) {
-            if (history.listened_seconds === null && !history.completed) continue;
-
             const evaluated = evaluatedByHistoryId.get(history.history_id);
-            const currentSeconds = Number(history.listened_seconds || 0);
+            const currentSeconds = Number(history.listened_seconds ?? 0);
 
             if (
                 !evaluated ||
-                Number(evaluated.listened_seconds) !== currentSeconds ||
+                Number(evaluated.listened_seconds ?? 0) !== currentSeconds ||
                 Boolean(evaluated.completed) !== Boolean(history.completed)
             ) {
-                pendingHistoryIds.add(history.history_id);
+                // Kể cả lượt nghe chưa có progress cũng được phục hồi.
+                // Lượt đó sẽ bị đánh dấu suspicious cho tới khi có progress mới.
+                activeWindowIds.add(history.history_id);
             }
         }
+
+        recoveryComplete = true;
+        console.log(
+            `Ranking queue recovery completed: ${activeWindowIds.size} pending history records`
+        );
+
+        return true;
     } catch (error) {
         console.error('Ranking queue recovery failed:', error.message);
+        return false;
     }
 };
 
-const processBatch = async () => {
-    await recoveryPromise;
+const ensureRecovery = async () => {
+    if (recoveryComplete) return true;
+    return recoverPendingHistory();
+};
 
-    if (isProcessing || (pendingHistoryIds.size === 0 && !leaderboardRefreshRequested)) {
-        return;
+const processWindow = async (windowBatch) => {
+    const historyRows = await fetchHistoryRows(windowBatch.historyIds);
+
+    if (historyRows.length === 0) return;
+
+    const { counts: recentPlayCounts, relatedRows } =
+        await getRecentPlayContext(historyRows);
+
+    const windowSpamReasons = getWindowSpamReasons(historyRows);
+    const batchIds = new Set(historyRows.map((row) => row.history_id));
+    const rowsByHistoryId = new Map();
+
+    for (const row of historyRows) {
+        rowsByHistoryId.set(row.history_id, row);
     }
+
+    // Đánh giá lại các lượt nghe cùng user/song trong 60 giây
+    // để giữ nguyên chính sách chống spam hiện tại của Melora.
+    for (const row of relatedRows) {
+        rowsByHistoryId.set(row.history_id, row);
+    }
+
+    const evaluatedAt = new Date().toISOString();
+    const rankingEvents = [...rowsByHistoryId.values()].map((row) => {
+        const key = `${row.user_id}:${row.song_id}`;
+        const windowSpamReason = batchIds.has(row.history_id)
+            ? windowSpamReasons.get(row.user_id) || null
+            : null;
+        const result = classifyListening(
+            row,
+            recentPlayCounts.get(key) || 0,
+            windowSpamReason
+        );
+
+        return {
+            history_id: row.history_id,
+            user_id: row.user_id,
+            song_id: row.song_id,
+            listened_seconds: Number(row.listened_seconds || 0),
+            completed: Boolean(row.completed),
+            status: result.status,
+            reason: result.reason,
+            evaluated_at: evaluatedAt
+        };
+    });
+
+    for (let i = 0; i < rankingEvents.length; i += UPSERT_CHUNK_SIZE) {
+        const { error } = await supabase
+            .from('ranking_events')
+            .upsert(rankingEvents.slice(i, i + UPSERT_CHUNK_SIZE), {
+                onConflict: 'history_id'
+            });
+
+        if (error) throw error;
+    }
+
+    const summary = rankingEvents.reduce((result, event) => {
+        result[event.status] += 1;
+        return result;
+    }, { accepted: 0, suspicious: 0, rejected: 0 });
+
+    console.log(
+        'Ranking tumbling window processed:',
+        {
+            windowStart: windowBatch.windowStart,
+            windowEnd: windowBatch.windowEnd,
+            events: rankingEvents.length,
+            spamUsers: windowSpamReasons.size,
+            ...summary
+        }
+    );
+
+    await refreshLeaderboard();
+};
+
+const drainCompletedWindows = async () => {
+    if (isProcessing) return;
 
     isProcessing = true;
 
-    const batch = [...pendingHistoryIds];
-    pendingHistoryIds.clear();
-
-    const shouldRefreshLeaderboard = leaderboardRefreshRequested;
-    leaderboardRefreshRequested = false;
-
     try {
-        if (batch.length > 0) {
-            const historyRows = await fetchAllRows(() => supabase
-                .from('listening_history')
-                .select(`
-                    history_id,
-                    user_id,
-                    song_id,
-                    listened_seconds,
-                    completed,
-                    songs (
-                        duration_seconds
-                    )
-                `)
-                .in('history_id', batch)
-                .order('history_id', { ascending: true }));
+        const recovered = await ensureRecovery();
+        if (!recovered) return;
 
-            if (historyRows.length > 0) {
-                const { counts: recentPlayCounts, relatedRows } =
-                    await getRecentPlayContext(historyRows);
+        while (completedWindows.length > 0) {
+            const currentWindow = completedWindows[0];
 
-                const rowsByHistoryId = new Map();
-
-                for (const row of historyRows) {
-                    rowsByHistoryId.set(row.history_id, row);
-                }
-
-                for (const row of relatedRows) {
-                    rowsByHistoryId.set(row.history_id, row);
-                }
-
-                const evaluatedAt = new Date().toISOString();
-                const rankingEvents = [...rowsByHistoryId.values()].map((row) => {
-                    const key = `${row.user_id}:${row.song_id}`;
-                    const result = classifyListening(
-                        row,
-                        recentPlayCounts.get(key) || 0
-                    );
-
-                    return {
-                        history_id: row.history_id,
-                        user_id: row.user_id,
-                        song_id: row.song_id,
-                        listened_seconds: Number(row.listened_seconds || 0),
-                        completed: Boolean(row.completed),
-                        status: result.status,
-                        reason: result.reason,
-                        evaluated_at: evaluatedAt
-                    };
-                });
-
-                const { error } = await supabase
-                    .from('ranking_events')
-                    .upsert(rankingEvents, { onConflict: 'history_id' });
-
-                if (error) throw error;
-
-                const summary = rankingEvents.reduce((result, event) => {
-                    result[event.status] += 1;
-                    return result;
-                }, { accepted: 0, suspicious: 0, rejected: 0 });
-
-                console.log(
-                    `Ranking batch processed: ${rankingEvents.length} events`,
-                    summary
+            try {
+                await processWindow(currentWindow);
+                completedWindows.shift();
+            } catch (error) {
+                // Giữ nguyên cửa sổ lỗi ở đầu hàng đợi để thử lại.
+                // Upsert theo history_id giúp việc thử lại không nhân đôi event.
+                console.error(
+                    'Ranking tumbling window processing failed:',
+                    error.message
                 );
+                break;
             }
         }
 
-        if (batch.length > 0 || shouldRefreshLeaderboard) {
-            await refreshLeaderboard();
+        if (leaderboardRefreshRequested && completedWindows.length === 0) {
+            try {
+                await refreshLeaderboard();
+                leaderboardRefreshRequested = false;
+            } catch (error) {
+                console.error('Leaderboard refresh failed:', error.message);
+            }
         }
-    } catch (error) {
-        for (const historyId of batch) {
-            pendingHistoryIds.add(historyId);
-        }
-
-        if (shouldRefreshLeaderboard || batch.length > 0) {
-            leaderboardRefreshRequested = true;
-        }
-
-        console.error('Ranking batch processing failed:', error.message);
     } finally {
         isProcessing = false;
     }
+};
+
+const closeTumblingWindow = (windowEnd) => {
+    const historyIds = [...activeWindowIds];
+    activeWindowIds.clear();
+
+    if (historyIds.length > 0) {
+        completedWindows.push({
+            windowStart: new Date(windowEnd - WINDOW_MS).toISOString(),
+            windowEnd: new Date(windowEnd).toISOString(),
+            historyIds
+        });
+    }
+
+    void drainCompletedWindows();
 };
 
 const enqueueListeningHistory = (historyId) => {
     const id = Number(historyId);
 
     if (Number.isInteger(id) && id > 0) {
-        pendingHistoryIds.add(id);
+        activeWindowIds.add(id);
     }
 };
 
 const requestLeaderboardRefresh = () => {
     leaderboardRefreshRequested = true;
+    void drainCompletedWindows();
 };
 
-// Rebuild the queue from persisted listening data after a backend restart.
-recoveryPromise = recoverPendingHistory();
-leaderboardRefreshRequested = true;
+// API tương thích để có thể yêu cầu đóng cửa sổ và xử lý ngay.
+const processBatch = async () => {
+    const now = Date.now();
+    closeTumblingWindow(now);
+    await drainCompletedWindows();
+};
 
-const windowTimer = setInterval(() => {
-    processBatch();
-}, WINDOW_MS);
+// Căn cửa sổ theo mốc thời gian cố định, không tạo các cửa sổ chồng lấn.
+const scheduleNextWindow = () => {
+    const now = Date.now();
+    const nextBoundary = (Math.floor(now / WINDOW_MS) + 1) * WINDOW_MS;
 
-if (typeof windowTimer.unref === 'function') {
-    windowTimer.unref();
-}
+    const timer = setTimeout(() => {
+        closeTumblingWindow(nextBoundary);
+        scheduleNextWindow();
+    }, nextBoundary - now);
+
+    if (typeof timer.unref === 'function') {
+        timer.unref();
+    }
+};
+
+scheduleNextWindow();
 
 module.exports = {
     enqueueListeningHistory,
