@@ -1,7 +1,7 @@
 const supabase = require('../config/supabase');
 
 const WINDOW_MS = 2_000;
-const BOT_REQ_THRESHOLD = 40;
+const BOT_REQ_THRESHOLD = 2;
 const BOT_FOCUS_THRESHOLD = 0.70;
 const MAX_PLAYS_PER_USER_SONG_PER_MINUTE = 5;
 const PAGE_SIZE = 1000;
@@ -139,7 +139,7 @@ const getWindowSpamReasons = (historyRows) => {
         if (focusRatio >= BOT_FOCUS_THRESHOLD) {
             spamReasons.set(
                 userId,
-                `tumbling_window_spam_over_40_requests_70_percent_song_${topSongId}`
+                `tumbling_window_spam_over_2_requests_70_percent_song_${topSongId}`
             );
         }
     }
