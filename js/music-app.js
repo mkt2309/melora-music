@@ -605,7 +605,10 @@ export class MusicApp {
   updateNowPlaying(track) {
     document.getElementById('player-title').textContent = track.title;
     document.getElementById('player-artist').textContent = track.artist;
-    document.getElementById('player-cover').src = track.cover_url || './assets/covers/cover-01.svg';
+    const coverUrl = track.cover_url || './assets/covers/cover-01.svg';
+    document.getElementById('player-cover').src = coverUrl;
+    const heroCover = document.getElementById('hero-disc-cover');
+    if (heroCover) heroCover.src = coverUrl;
     this.updatePlayerFavorite();
   }
 
@@ -654,6 +657,8 @@ export class MusicApp {
     const filtered = this.searchTerm
       ? this.tracks.filter((track) => `${track.title} ${track.artist} ${track.album}`.toLocaleLowerCase('vi').includes(this.searchTerm.toLocaleLowerCase('vi')))
       : this.tracks;
+    const heroTrack = this.engine.currentTrack || filtered[0];
+    const heroCoverUrl = heroTrack?.cover_url || './assets/covers/cover-01.svg';
     return `
       <section class="hero-banner">
         <div class="hero-copy">
@@ -662,7 +667,7 @@ export class MusicApp {
           <p>Khám phá những thanh âm mới và lưu lại khoảnh khắc bạn yêu thích.</p>
           <button class="button button-light" type="button" data-action="play" data-id="${escapeHTML(filtered[0]?.id || '')}">▶ &nbsp; Nghe ngay</button>
         </div>
-        <div class="hero-art" aria-hidden="true"><span class="hero-disc"></span><span class="hero-spark spark-one">✦</span><span class="hero-spark spark-two">✧</span></div>
+        <div class="hero-art" aria-hidden="true"><span class="hero-disc"><img id="hero-disc-cover" src="${escapeHTML(heroCoverUrl)}" alt="" /></span><span class="hero-spark spark-one">✦</span><span class="hero-spark spark-two">✧</span></div>
         <div class="hero-index">01 <span>/</span> 03</div>
       </section>
       <div class="section-heading section-heading-spaced">
