@@ -668,7 +668,6 @@ export class MusicApp {
           <button class="button button-light" type="button" data-action="play" data-id="${escapeHTML(filtered[0]?.id || '')}">▶ &nbsp; Nghe ngay</button>
         </div>
         <div class="hero-art" aria-hidden="true"><span class="hero-disc"><img id="hero-disc-cover" src="${escapeHTML(heroCoverUrl)}" alt="" /></span><span class="hero-spark spark-one">✦</span><span class="hero-spark spark-two">✧</span></div>
-        <div class="hero-index">01 <span>/</span> 03</div>
       </section>
       <div class="section-heading section-heading-spaced">
         <div><p class="eyebrow">DANH SÁCH PHÁT</p><h2>${this.searchTerm ? `Kết quả cho “${escapeHTML(this.searchTerm)}”` : 'Những bài hát nổi bật'}</h2><p class="section-subtitle">${filtered.length} bài hát trong thư viện</p></div>
