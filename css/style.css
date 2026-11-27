@@ -540,44 +540,139 @@ body { background: #f6f7f9; color: #172033; }
 .toast-error { border-color: #f1c9cf; color: #a63f55; }
 .loading-spinner { border-color: #dce5fa; border-top-color: #2f5fd0; }
 
-/* Database-backed leaderboard column chart */
+/* Rotating vinyl record in the player */
+.player-record {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid #34415b;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, #0b1220 0 2px, #253049 3px 4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.24);
+  animation: vinyl-spin 6s linear infinite;
+  animation-play-state: paused;
+}
+.player-record.is-playing { animation-play-state: running; }
+.player-record img {
+  display: block;
+  width: 44%;
+  height: 44%;
+  border: 2px solid rgba(255,255,255,.72);
+  border-radius: 50%;
+  object-fit: cover;
+}
+.player-record::after {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #e7edfb;
+  box-shadow: 0 0 0 1px rgba(16,26,46,.25);
+  content: '';
+  pointer-events: none;
+}
+@keyframes vinyl-spin { to { transform: rotate(360deg); } }
+.hero-disc { animation: vinyl-spin 14s linear infinite; }
+
+/* Database-backed leaderboard table */
 .ranking-note { border-color: #dce5fa; color: #465573; background: #f3f6ff; }
 .ranking-note span { color: #2350b8; background: #dce7ff; }
 .ranking-summary { color: #7d8798; }
 .ranking-summary strong { color: #172033; }
-.ranking-chart { margin-top: 10px; padding: 22px; border: 1px solid #e2e6ee; border-radius: 18px; background: #fff; }
-.chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.chart-heading h2 { margin: 0; color: #172033; font-size: 17px; }
-.chart-heading p { margin: 6px 0 0; color: #7d8798; font-size: 12px; }
-.chart-source { flex: 0 0 auto; padding: 6px 10px; border-radius: 99px; color: #2350b8; background: #e7edfb; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
-.chart-hint { margin: 10px 0 0; color: #7d8798; font-size: 11px; }
-.chart-scroll { overflow-x: auto; margin-top: 16px; padding: 8px 4px 0; }
-.chart-plot {
-  display: grid;
-  grid-template-columns: 52px repeat(var(--bar-count), minmax(38px, 1fr));
-  grid-template-rows: 260px 112px;
-  min-width: calc(52px + var(--bar-count) * 38px);
-  padding-top: 16px;
+.ranking-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+  border: 1px solid #e2e6ee;
+  border-radius: 16px;
+  background: #fff;
 }
-.chart-y-axis, .chart-bars { position: relative; grid-row: 1; }
-.chart-y-axis span { position: absolute; right: 10px; transform: translateY(50%); color: #7d8798; font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1; }
-.chart-bars { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(var(--bar-count), minmax(0, 1fr)); }
-.chart-bars > i { position: absolute; left: 0; right: 0; border-top: 1px solid #e9edf4; pointer-events: none; }
-.chart-bar { position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: center; min-width: 0; height: 100%; padding: 0; background: transparent; }
-.chart-bar-fill { position: absolute; bottom: 0; width: min(28px, calc(100% - 8px)); border-radius: 5px 5px 0 0; background: #2f5fd0; transition: height .25s ease, background .2s ease; }
-.chart-bar:hover .chart-bar-fill, .chart-bar:focus-visible .chart-bar-fill { background: #173f99; }
-.chart-bar-value { position: absolute; left: 50%; transform: translateX(-50%); color: #172033; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.chart-x-label { grid-row: 2; justify-self: center; align-self: start; max-height: 104px; margin-top: 8px; overflow: hidden; color: #5d677a; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; writing-mode: vertical-rl; transform: rotate(180deg); }
-.chart-bar:focus-visible { outline: 2px solid #2350b8; outline-offset: -2px; }
+.ranking-table {
+  width: 100%;
+  min-width: 570px;
+  border-collapse: collapse;
+  text-align: left;
+}
+.ranking-table thead { background: #f1f4f9; }
+.ranking-table th {
+  height: 45px;
+  padding: 0 18px;
+  color: #7d8798;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .8px;
+  white-space: nowrap;
+}
+.ranking-table td {
+  height: 66px;
+  padding: 8px 18px;
+  border-top: 1px solid #edf0f5;
+  color: #5d677a;
+  font-size: 12px;
+}
+.ranking-table tbody tr { transition: background .16s ease; }
+.ranking-table tbody tr:hover { background: #f7f9fd; }
+.ranking-rank-heading, .ranking-rank { width: 76px; text-align: center !important; }
+.ranking-rank {
+  color: #2350b8 !important;
+  font-size: 14px !important;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ranking-track-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  max-width: 100%;
+  padding: 5px 8px 5px 0;
+  border: 0;
+  color: #172033;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ranking-track-button:hover { color: #2350b8; }
+.ranking-track-button > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ranking-track-icon {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: #2350b8;
+  background: #e7edfb;
+  font-size: 9px;
+}
+.ranking-track-button:hover .ranking-track-icon { color: #fff; background: #2f5fd0; }
+.ranking-artist { color: #7d8798 !important; }
+.ranking-count-heading, .ranking-count {
+  text-align: right !important;
+  white-space: nowrap;
+}
+.ranking-count {
+  color: #172033 !important;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
 .ranking-refreshing { color: #7d8798; }
 .empty-state { color: #5d677a; }
 .empty-state h3 { color: #172033; }
 .empty-state-icon { color: #2f5fd0; background: #e7edfb; }
 
 @media (max-width: 760px) {
-  .ranking-chart { padding: 16px 12px; }
-  .chart-heading { flex-direction: column; }
-  .chart-source { align-self: flex-start; }
-  .chart-plot { grid-template-rows: 230px 105px; }
-  .chart-bar-fill { width: min(24px, calc(100% - 6px)); }
+  .player-record { width: 48px; height: 48px; }
+  .ranking-table th, .ranking-table td { padding-right: 12px; padding-left: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-record, .hero-disc { animation: none !important; }
 }
