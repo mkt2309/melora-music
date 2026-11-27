@@ -695,28 +695,75 @@ export class MusicApp {
       return `${heading}${this.emptyState('Không tải được bảng xếp hạng', this._leaderboardError, 'Thử lại', 'data-action="refresh-ranking"')}`;
     }
 
-    const tracks = this.leaderboard.map((item) => {
-      const existingTrack = this.getTrack(item.song_id);
-      return {
-        ...(existingTrack || {}),
-        id: item.song_id,
-        title: item.title || existingTrack?.title || 'Bài hát không xác định',
-        artist: item.artist || existingTrack?.artist || 'Nghệ sĩ chưa rõ',
-        duration_seconds: item.duration_seconds ?? existingTrack?.duration_seconds ?? existingTrack?.duration ?? null,
-        plays: Number(item.play_count || 0),
-        album: existingTrack?.album || '',
-        cover_url: existingTrack?.cover_url || null
-      };
-    });
-
-    if (!tracks.length) {
-      return `${heading}${this.emptyState('Chưa có dữ liệu xếp hạng', 'Bảng xếp hạng sẽ xuất hiện khi hệ thống ghi nhận các lượt nghe hợp lệ.')}`;
+    if (!this.leaderboard.length) {
+      return `${heading}${this.emptyState('Chưa có dữ liệu xếp hạng', 'Bảng xếp hạng sẽ xuất hiện khi cơ sở dữ liệu ghi nhận các lượt nghe hợp lệ.')}`;
     }
 
     return `${heading}
-      <div class="ranking-summary"><strong>${tracks.length}</strong><span>bài hát đang được xếp hạng</span></div>
-      ${this.renderTrackTable(tracks)}
+      <div class="ranking-summary"><strong>${this.leaderboard.length}</strong><span>bài hát trong dữ liệu xếp hạng</span></div>
+      ${this.renderLeaderboardChart(this.leaderboard)}
       ${this._leaderboardLoading ? '<p class="ranking-refreshing">Đang cập nhật dữ liệu mới…</p>' : ''}`;
+  }
+
+  renderLeaderboardChart(items) {
+    const values = items.map((item) => Math.max(0, Number(item.play_count) || 0));
+    const highest = Math.max(0, ...values);
+    const rawStep = highest > 0 ? highest / 4 : 1;
+    const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+    const step = [1, 2, 5, 10]
+      .map((factor) => factor * magnitude)
+      .find((candidate) => candidate >= rawStep) || 10 * magnitude;
+    const axisMax = Math.max(step, Math.ceil(highest / step) * step);
+    const divisions = Math.max(1, Math.ceil(axisMax / step));
+    const ticks = Array.from({ length: divisions + 1 }, (_, index) => index * step);
+    const formatValue = (value) => Number(value).toLocaleString('vi-VN', {
+      maximumFractionDigits: 2
+    });
+
+    return `
+      <section class="ranking-chart" aria-label="Biểu đồ cột lượt nghe hợp lệ theo bài hát">
+        <div class="chart-heading">
+          <div>
+            <h2>Lượt nghe theo bài hát</h2>
+            <p>Số liệu được trả về từ bảng xếp hạng trong cơ sở dữ liệu.</p>
+          </div>
+          <span class="chart-source">DỮ LIỆU DATABASE</span>
+        </div>
+        <p class="chart-hint">Di chuột để xem thông tin. Chọn một cột để phát bài hát.</p>
+        <div class="chart-scroll">
+          <div class="chart-plot" style="--bar-count:${items.length}">
+            <div class="chart-y-axis" aria-hidden="true">
+              ${ticks.map((value) => `<span style="bottom:${value / axisMax * 100}%">${formatValue(value)}</span>`).join('')}
+            </div>
+            <div class="chart-bars">
+              ${ticks.map((value) => `<i style="bottom:${value / axisMax * 100}%"></i>`).join('')}
+              ${items.map((item, index) => {
+                const value = values[index];
+                const height = value / axisMax * 100;
+                const title = item.title || 'Bài hát không xác định';
+                const artist = item.artist || 'Nghệ sĩ chưa rõ';
+                const rank = Number(item.rank) || index + 1;
+                return `
+                  <button
+                    class="chart-bar"
+                    type="button"
+                    data-action="play"
+                    data-id="${escapeHTML(item.song_id)}"
+                    title="${escapeHTML(title)} · ${escapeHTML(artist)} · ${formatValue(value)} lượt nghe"
+                    aria-label="Hạng ${rank}: ${escapeHTML(title)}, ${formatValue(value)} lượt nghe"
+                  >
+                    <span class="chart-bar-fill" style="height:${height}%"></span>
+                    <span class="chart-bar-value" style="bottom:calc(${height}% + 6px)">${formatValue(value)}</span>
+                  </button>`;
+              }).join('')}
+            </div>
+            ${items.map((item, index) => `
+              <span class="chart-x-label" style="grid-column:${index + 2}" title="${escapeHTML(item.title || 'Bài hát không xác định')}">
+                ${escapeHTML(item.title || 'Bài hát không xác định')}
+              </span>`).join('')}
+          </div>
+        </div>
+      </section>`;
   }
 
   renderTrackCollectionPage(type) {

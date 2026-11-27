@@ -185,19 +185,9 @@ export class MusicDB {
       ? Math.min(Number(limit), 100)
       : 50;
 
+    // Bảng xếp hạng chỉ được phép sử dụng dữ liệu từ Backend/Database.
     if (this.demoMode) {
-      const tracks = await this.getSongs();
-      return tracks
-        .map((track) => ({
-          song_id: track.id,
-          title: track.title,
-          artist: track.artist,
-          duration_seconds: track.duration_seconds ?? track.duration ?? null,
-          play_count: Number(track.plays || 0)
-        }))
-        .sort((a, b) => b.play_count - a.play_count)
-        .slice(0, safeLimit)
-        .map((item, index) => ({ ...item, rank: index + 1 }));
+      throw new Error('Bảng xếp hạng yêu cầu kết nối Backend để đọc dữ liệu cơ sở dữ liệu.');
     }
 
     const payload = await this.request(`/ranking/leaderboard?limit=${safeLimit}`);
