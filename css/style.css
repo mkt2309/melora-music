@@ -571,35 +571,20 @@ body { background: #f6f7f9; color: #172033; }
 }
 .player-record.is-playing { animation-play-state: running; }
 
-/* The blue center label and gold mark are shared by both records. */
-.hero-disc::before,
-.player-record::before {
-  position: absolute;
-  z-index: 1;
+/* The current song cover is displayed as the center label on both records. */
+.hero-disc img,
+.player-record img {
+  position: relative;
+  z-index: 2;
+  display: block;
   width: 44%;
+  height: 44%;
   aspect-ratio: 1;
   border: 2px solid #111d35;
   border-radius: 50%;
-  background: #31558f;
+  object-fit: cover;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
-  content: '';
 }
-.hero-disc::after,
-.player-record::after {
-  position: absolute;
-  z-index: 2;
-  width: 35%;
-  height: 38%;
-  border-radius: 50%;
-  background:
-    radial-gradient(ellipse at 30% 72%, #f1d58f 0 35%, transparent 37%),
-    linear-gradient(62deg, transparent 0 49%, #f1d58f 50% 57%, transparent 58%),
-    linear-gradient(62deg, transparent 0 66%, #f1d58f 67% 73%, transparent 74%),
-    linear-gradient(62deg, transparent 0 82%, #f1d58f 83% 89%, transparent 90%);
-  content: '';
-  pointer-events: none;
-}
-.player-record img { display: none; }
 @keyframes vinyl-spin { to { transform: rotate(360deg); } }
 
 /* Database-backed leaderboard table */
