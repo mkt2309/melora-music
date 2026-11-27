@@ -571,18 +571,26 @@ body { background: #f6f7f9; color: #172033; }
 }
 .player-record.is-playing { animation-play-state: running; }
 
-/* The current song cover is displayed as the center label on both records. */
+/* Keep the song cover precisely centered as the label of each vinyl record. */
+.hero-disc::before {
+  display: none;
+  content: none;
+}
 .hero-disc img,
 .player-record img {
-  position: relative;
+  position: absolute;
   z-index: 2;
+  top: 50%;
+  left: 50%;
   display: block;
   width: 44%;
   height: 44%;
+  margin: 0;
   aspect-ratio: 1;
   border: 2px solid #111d35;
   border-radius: 50%;
   object-fit: cover;
+  transform: translate(-50%, -50%);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
 }
 @keyframes vinyl-spin { to { transform: rotate(360deg); } }
