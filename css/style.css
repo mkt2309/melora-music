@@ -540,43 +540,67 @@ body { background: #f6f7f9; color: #172033; }
 .toast-error { border-color: #f1c9cf; color: #a63f55; }
 .loading-spinner { border-color: #dce5fa; border-top-color: #2f5fd0; }
 
-/* Rotating vinyl record in the player */
+/* Vinyl record: match the reference HTML in both hero and bottom player */
+.hero-disc,
 .player-record {
   position: relative;
   display: grid;
   place-items: center;
+  border: 1px solid #090f1d;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle at center,
+      #080e1b 0 1px,
+      #172238 1.5px 2.5px,
+      #080e1b 3px 4px);
+  box-shadow: 0 8px 22px rgba(7, 16, 34, .28);
+  isolation: isolate;
+}
+.hero-disc {
+  width: 205px;
+  height: 205px;
+  animation: vinyl-spin 14s linear infinite;
+}
+.player-record {
   width: 60px;
   height: 60px;
   flex: 0 0 auto;
   overflow: hidden;
-  border: 1px solid #34415b;
-  border-radius: 50%;
-  background: repeating-radial-gradient(circle, #0b1220 0 2px, #253049 3px 4px);
-  box-shadow: 0 4px 12px rgba(0,0,0,.24);
   animation: vinyl-spin 6s linear infinite;
   animation-play-state: paused;
 }
 .player-record.is-playing { animation-play-state: running; }
-.player-record img {
-  display: block;
+
+/* The blue center label and gold mark are shared by both records. */
+.hero-disc::before,
+.player-record::before {
+  position: absolute;
+  z-index: 1;
   width: 44%;
-  height: 44%;
-  border: 2px solid rgba(255,255,255,.72);
+  aspect-ratio: 1;
+  border: 2px solid #111d35;
   border-radius: 50%;
-  object-fit: cover;
+  background: #31558f;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  content: '';
 }
+.hero-disc::after,
 .player-record::after {
   position: absolute;
-  width: 4px;
-  height: 4px;
+  z-index: 2;
+  width: 35%;
+  height: 38%;
   border-radius: 50%;
-  background: #e7edfb;
-  box-shadow: 0 0 0 1px rgba(16,26,46,.25);
+  background:
+    radial-gradient(ellipse at 30% 72%, #f1d58f 0 35%, transparent 37%),
+    linear-gradient(62deg, transparent 0 49%, #f1d58f 50% 57%, transparent 58%),
+    linear-gradient(62deg, transparent 0 66%, #f1d58f 67% 73%, transparent 74%),
+    linear-gradient(62deg, transparent 0 82%, #f1d58f 83% 89%, transparent 90%);
   content: '';
   pointer-events: none;
 }
+.player-record img { display: none; }
 @keyframes vinyl-spin { to { transform: rotate(360deg); } }
-.hero-disc { animation: vinyl-spin 14s linear infinite; }
 
 /* Database-backed leaderboard table */
 .ranking-note { border-color: #dce5fa; color: #465573; background: #f3f6ff; }
